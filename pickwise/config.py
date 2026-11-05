@@ -44,10 +44,22 @@ class Game:
     price: int
     draw_days: str
     source_desc: str
+    mode: str = "dual"          # dual=前区+后区；pool=单一号池（快乐8）
+    pick_size: int = 0          # pool 模式下玩家选号个数（选十玩法=10）
+    prize_levels: tuple = ()    # ((命中个数, 单注奖金, 奖级名称), ...)
+    prize_note: str = ""
 
     @property
     def csv_path(self):
         return DATA_DIR / f"{self.key}.csv"
+
+    @property
+    def is_pool(self):
+        return self.mode == "pool"
+
+    @property
+    def prize_map(self):
+        return {hits: money for hits, money, _ in self.prize_levels}
 
 
 GAMES = {
@@ -84,14 +96,42 @@ GAMES = {
         draw_days="每周二、五、日",
         source_desc="中国体育彩票 webapi 历史开奖列表（全量，含开奖日期）",
     ),
+    "kl8": Game(
+        key="kl8",
+        name="快乐8（选十）",
+        short="KL8",
+        org="中国福利彩票",
+        front=Zone("front", "开奖号", 20, 1, 80, True),
+        back=Zone("back", "", 0, 0, 0, True),  # 单一号池，无独立后区
+        price=2,
+        draw_days="每天（休市日除外）",
+        source_desc="中国福彩网快乐 8 开奖公告（全量，含开奖日期）",
+        mode="pool",
+        pick_size=10,
+        prize_levels=(
+            (10, 5_000_000, "选十中十（浮动奖，单注封顶 500 万）"),
+            (9, 8_000, "选十中九"),
+            (8, 720, "选十中八"),
+            (7, 80, "选十中七"),
+            (6, 5, "选十中六"),
+            (5, 3, "选十中五"),
+            (0, 2, "选十中零"),
+        ),
+        prize_note="官方规则：从 1~80 中选 1~10 个号码投注，每注 2 元，每期开出 20 个号码；"
+                   "彩票奖金按销售额 58% 计提（57% 当期奖金 + 1% 调节基金）。",
+    ),
 }
 
-GAME_ORDER = ("ssq", "dlt", "qxc")
+GAME_ORDER = ("ssq", "dlt", "qxc", "kl8")
 
 # ---------------------------------------------------------------- 数据源
 CWL_API = (
     "https://www.cwl.gov.cn/cwl_admin/front/cwlkj/search/kjxx/findDrawNotice"
     "?name=ssq&issueCount=3000&pageNo={page}&pageSize=100&systemType=PC"
+)
+CWL_KL8_API = (
+    "https://www.cwl.gov.cn/cwl_admin/front/cwlkj/search/kjxx/findDrawNotice"
+    "?name=kl8&issueCount=5000&pageNo={page}&pageSize=100&systemType=PC"
 )
 CWL_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",

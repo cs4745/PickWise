@@ -1,6 +1,6 @@
 {
-  "fetched_at": "2026-11-05T16:13:17+08:00",
-  "mode": "incremental",
+  "fetched_at": "2026-11-05T16:37:25+08:00",
+  "mode": "full",
   "games": {
     "ssq": {
       "game": "ssq",
@@ -39,8 +39,8 @@
         ],
         "source": "500彩票网"
       },
-      "mode": "incremental",
-      "stop_reason": "incremental_stop",
+      "mode": "full",
+      "stop_reason": "complete",
       "validation_errors": 0,
       "validation_warnings": 1439,
       "warning_sample": [
@@ -96,8 +96,8 @@
         ],
         "source": "中国体育彩票"
       },
-      "mode": "incremental",
-      "stop_reason": "incremental_stop",
+      "mode": "full",
+      "stop_reason": "complete",
       "validation_errors": 0,
       "validation_warnings": 0,
       "warning_sample": [],
@@ -149,17 +149,86 @@
         ],
         "source": "中国体育彩票"
       },
-      "mode": "incremental",
-      "stop_reason": "incremental_stop",
+      "mode": "full",
+      "stop_reason": "complete",
       "validation_errors": 0,
       "validation_warnings": 0,
       "warning_sample": [],
       "sha256": "4dc0cb9849e0a77b61c850b0ddf96c8b125f8326f857ebe17b36b3b4be1c048f"
+    },
+    "kl8": {
+      "game": "kl8",
+      "name": "快乐8（选十）",
+      "count": 2115,
+      "new_rows": 0,
+      "latest": {
+        "issue": "2026294",
+        "date": "2026-11-04",
+        "front": [
+          3,
+          7,
+          10,
+          16,
+          21,
+          25,
+          29,
+          33,
+          35,
+          43,
+          45,
+          52,
+          58,
+          60,
+          64,
+          68,
+          69,
+          72,
+          76,
+          80
+        ],
+        "back": [],
+        "source": "中国福彩网"
+      },
+      "earliest": {
+        "issue": "2020001",
+        "date": "2020-10-28",
+        "front": [
+          6,
+          8,
+          15,
+          27,
+          28,
+          30,
+          37,
+          38,
+          39,
+          44,
+          46,
+          49,
+          51,
+          52,
+          59,
+          70,
+          75,
+          77,
+          78,
+          80
+        ],
+        "back": [],
+        "source": "中国福彩网"
+      },
+      "mode": "full",
+      "stop_reason": "complete",
+      "validation_errors": 0,
+      "validation_warnings": 0,
+      "warning_sample": [],
+      "sha256": "1b70d7fd32c03ee65f553c431e51f5cbfa8a39cc557107ac4a93aedefbc9aa6d"
     }
   },
   "sources": {
     "ssq": "中国福彩网开奖公告（2013 年至今，含开奖日期）+ 500 彩票网历史数据（2003 年首期起，补齐早期，二者重叠期号逐期交叉校验）",
     "dlt": "中国体育彩票 webapi 历史开奖列表（全量，含开奖日期）+ 500 彩票网历史数据（全量，逐期交叉校验）",
-    "qxc": "中国体育彩票 webapi 历史开奖列表（全量，含开奖日期）"
+    "qxc": "中国体育彩票 webapi 历史开奖列表（全量，含开奖日期）",
+    "kl8": "中国福彩网快乐 8 开奖公告（全量，含开奖日期）"
   }
 }

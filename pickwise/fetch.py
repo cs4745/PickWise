@@ -21,6 +21,7 @@ from .config import (
     CWL500_HEADERS,
     CWL_API,
     CWL_HEADERS,
+    CWL_KL8_API,
     DATA_DIR,
     DLT500_API,
     DLT500_HEADERS,
@@ -87,13 +88,19 @@ def _nums(text: str):
     return [int(x) for x in re.findall(r"\d+", str(text))]
 
 
+def _ints(values):
+    """把号码序列转成整数，忽略空字符串（快乐8 官方接口 blue 为空）。"""
+    return [int(x) for x in values if str(x).strip() != ""]
+
+
 def make_draw(game_key, issue, date, front, back, source):
     g = game_of(game_key)
+    f, b = _ints(front), _ints(back)
     return {
         "issue": normalize_issue(issue, game_key),
         "date": clean_date(date),
-        "front": sorted(int(x) for x in front) if g.front.combination else [int(x) for x in front],
-        "back": sorted(int(x) for x in back) if g.back.combination else [int(x) for x in back],
+        "front": sorted(f) if g.front.combination else f,
+        "back": sorted(b) if g.back.combination else b,
         "source": source,
     }
 
@@ -128,6 +135,35 @@ def fetch_cwl_official(max_pages: int | None = None, stop_at: set | None = None)
             reason = "incremental_stop"
             break
         if total_pages and page >= total_pages:
+            break
+        page += 1
+    return out, reason
+
+
+def fetch_cwl_kl8(max_pages: int | None = None, stop_at: set | None = None):
+    """中国福彩网快乐 8 开奖公告：每期开出 20 个号码（1~80）。"""
+    out, reason = [], "complete"
+    page, limit, total_pages = 1, max_pages or 40, None
+    while page <= limit:
+        data = json.loads(http_get(CWL_KL8_API.format(page=page), CWL_HEADERS))
+        rows = data.get("result") or []
+        if total_pages is None:
+            total_pages = max(1, (int(data.get("total") or 0) + 99) // 100)
+        if not rows:
+            reason = "empty"
+            break
+        hit_old = False
+        for r in rows:
+            issue = normalize_issue(r.get("code", ""), "kl8")
+            if stop_at and issue in stop_at:
+                hit_old = True
+                continue
+            reds = str(r.get("red", "")).split(",")
+            out.append(make_draw("kl8", issue, r.get("date"), reds, [], "中国福彩网"))
+        if hit_old:
+            reason = "incremental_stop"
+            break
+        if page >= total_pages:
             break
         page += 1
     return out, reason
@@ -323,7 +359,12 @@ def fetch_game(game_key: str, full: bool = True, verbose: bool = True):
     new_draws, extra = [], {}
     reason = "full"
 
-    if game_key == "ssq":
+    if game_key == "kl8":
+        new_draws, reason = fetch_cwl_kl8(
+            max_pages=None if full else 5,
+            stop_at=None if full else local_issues,
+        )
+    elif game_key == "ssq":
         official, reason = fetch_cwl_official(
             max_pages=None if full else 5,
             stop_at=None if full else local_issues,

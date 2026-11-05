@@ -23,6 +23,9 @@ DATA_NOTES = {
     "ssq": "2013 年之前的开奖日期官方接口未提供（CSV 中日期留空）；2003 年起的号码已与 500 彩票网历史数据逐期交叉校验一致。",
     "dlt": "分段检验显示 2007–2010 年前区号码分布明显偏向大号，两个独立数据源的号码完全一致，说明并非采集错误，而是历史口径/摇奖方式差异；2019 年后与均匀假设一致。该偏离不提供任何预测能力。",
     "qxc": "七星彩第 7 位自 2020 年起由 0~9 扩展为 0~14，因此「全历史特别位」的均匀性检验必然显著偏离，应看分段结果；前六位不受影响。",
+    "kl8": "快乐 8 自 2020-10-28 上市，每天开奖（休市日除外），每期从 1~80 开出 20 个号码；"
+           "本项目按官方「选十」玩法（自选 10 个号、每注 2 元）分析。开奖号为 20 个，"
+           "而玩家只选 10 个，因此频率/遗漏描述的是开奖号，推荐与回测描述的是选十投注。",
 }
 
 
@@ -201,6 +204,37 @@ def _structure_digits(draws, game):
     }
 
 
+def _structure_pool(draws, game):
+    """快乐 8：20 个开奖号的和值、奇偶、四区分布、连号、与上期重号。"""
+    sums, odds, cons, repeats, zones = [], [], [], [], []
+    prev = None
+    for d in draws:
+        v = d["front"]
+        sums.append(sum(v))
+        odds.append(sum(1 for x in v if x % 2))
+        cons.append(sum(1 for a, b in zip(v, v[1:]) if b - a == 1))
+        if prev is not None:
+            repeats.append(len(set(v) & set(prev)))
+        zones.append(tuple(sum(1 for x in v if 20 * i < x <= 20 * (i + 1)) for i in range(4)))
+        prev = v
+    s = sorted(sums)
+    return {
+        "type": "pool",
+        "sum": {"values": sums[-TREND_LEN:], "mean": round(statistics.mean(sums), 2),
+                "min": min(sums), "max": max(sums),
+                "p10": s[int(len(s) * .1)], "p90": s[int(len(s) * .9)],
+                "hist": _histogram(sums, 14)},
+        "odd_count": _count_dist(odds, game.front.size + 1),
+        "consecutive_rate": round(sum(1 for c in cons if c) / len(cons), 4),
+        "consecutive_mean": round(statistics.mean(cons), 3),
+        "repeat_mean": round(statistics.mean(repeats), 4) if repeats else None,
+        "repeat_theoretical": round(game.front.size ** 2 / game.front.slots, 4),
+        "zone_ratio_top": [{"ratio": ":".join(str(x) for x in k), "count": n}
+                           for k, n in Counter(zones).most_common(6)],
+        "sum_lag1_corr": pearson_corr(sums[:-1], sums[1:]),
+    }
+
+
 def _histogram(values, bins):
     lo, hi = min(values), max(values)
     width = (hi - lo + 1) / bins
@@ -315,8 +349,32 @@ def analyze_game(game_key: str, windows=WINDOWS):
     draws = load_draws(game_key)
     if len(draws) < 30:
         raise RuntimeError(f"{game.name} 数据不足（{len(draws)} 期），请先运行 fetch")
-    structure = (_structure_combination(draws, game) if game.front.combination
-                 else _structure_digits(draws, game))
+    if game.is_pool:
+        structure = _structure_pool(draws, game)
+        zones = {
+            "front": _zone_analysis(draws, "front", game, windows),
+            "back": {
+                "name": "—", "low": 0, "high": 0, "size": 0, "combination": True,
+                "numbers": [], "counts": [], "expected": 0, "rates": [],
+                "recent_counts": {}, "recent_window": min(windows, key=lambda w: abs(w - 100)),
+                "omission": {}, "hot": [], "cold": [], "not_applicable": True,
+                "chi2": {"stat": 0, "df": 0, "pvalue": 1,
+                         "conclusion": "单一号池玩法，没有独立后区，不适用"},
+            },
+        }
+        eras = {"front": era_check(draws, game, "front"), "back": []}
+        rules = (f"每期从 1~{game.front.slots} 开出 {game.front.size} 个号码；"
+                 f"选十玩法自选 {game.pick_size} 个号码投注，每注 ¥{game.price}")
+    else:
+        structure = (_structure_combination(draws, game) if game.front.combination
+                     else _structure_digits(draws, game))
+        zones = {"front": _zone_analysis(draws, "front", game, windows),
+                 "back": _zone_analysis(draws, "back", game, windows)}
+        eras = {"front": era_check(draws, game, "front"),
+                "back": era_check(draws, game, "back")}
+        rules = (f"{game.front.name} {game.front.size} 个（{game.front.low}~{game.front.high}"
+                 + ("，不重复）" if game.front.combination else "，按位可重复）")
+                 + f" + {game.back.name} {game.back.size} 个（{game.back.low}~{game.back.high}）")
     trend = []
     for d in draws[-TREND_LEN:]:
         trend.append({
@@ -332,19 +390,20 @@ def analyze_game(game_key: str, windows=WINDOWS):
         "price": game.price,
         "draw_days": game.draw_days,
         "source_desc": game.source_desc,
-        "rules": f"{game.front.name} {game.front.size} 个（{game.front.low}~{game.front.high}"
-                 + ("，不重复）" if game.front.combination else "，按位可重复）")
-                 + f" + {game.back.name} {game.back.size} 个（{game.back.low}~{game.back.high}）",
+        "rules": rules,
         "count": len(draws),
         "latest": {"issue": draws[-1]["issue"], "date": draws[-1]["date"],
                    "front": draws[-1]["front"], "back": draws[-1]["back"]},
         "earliest": {"issue": draws[0]["issue"], "date": draws[0]["date"]},
         "windows": list(windows),
         "data_notes": DATA_NOTES.get(game_key, ""),
-        "zones": {"front": _zone_analysis(draws, "front", game, windows),
-                  "back": _zone_analysis(draws, "back", game, windows)},
-        "era_check": {"front": era_check(draws, game, "front"),
-                      "back": era_check(draws, game, "back")},
+        "zones": zones,
+        "era_check": eras,
+        "is_pool": game.is_pool,
+        "pick_size": game.pick_size,
+        "prize_levels": [{"hits": h, "prize": m, "level": lv}
+                         for h, m, lv in game.prize_levels],
+        "prize_note": game.prize_note,
         "structure": structure,
         "trend": trend,
     }

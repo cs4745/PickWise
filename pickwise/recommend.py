@@ -29,6 +29,10 @@ STRATEGIES = {
 
 def jackpot_odds(game_key: str) -> str:
     g = game_of(game_key)
+    if g.is_pool:
+        # 选十中十：所选 10 个号全部落在当期开出的 20 个号中（超几何分布）
+        p = math.comb(g.front.size, g.pick_size) / math.comb(g.front.slots, g.pick_size)
+        return f"1 / {round(1 / p):,}"
     if g.front.combination:
         total = math.comb(g.front.slots, g.front.size) * math.comb(g.back.slots, g.back.size)
     else:
@@ -109,6 +113,10 @@ def generate_one(game_key, strategy, draws, rng, window=100, structure=None,
         weights = (_weights_for(draws, "front", game, strategy, window),
                    _weights_for(draws, "back", game, strategy, window))
     wf, wb = weights
+
+    if game.is_pool:
+        # 单一号池：只从 1~80 选 pick_size 个号，没有后区
+        return (sorted(_weighted_sample(rng, game.front.numbers, wf, game.pick_size)), [])
 
     front, back = None, None
     for attempt in range(300):

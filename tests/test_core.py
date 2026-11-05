@@ -41,6 +41,7 @@ class TestMath(unittest.TestCase):
         self.assertEqual(jackpot_odds("ssq"), "1 / 17,721,088")
         self.assertEqual(jackpot_odds("dlt"), "1 / 21,425,712")
         self.assertEqual(jackpot_odds("qxc"), "1 / 15,000,000")
+        self.assertEqual(jackpot_odds("kl8"), "1 / 8,911,711")
 
 
 class TestValidation(unittest.TestCase):
@@ -101,24 +102,62 @@ class TestNewsStrategy(unittest.TestCase):
         for k in GAME_ORDER:
             g = game_of(k)
             s = news_strategy(k, groups=6, expand=2, seed=7)
+            n_front = g.pick_size if g.is_pool else g.front.size
+            n_back = 0 if g.is_pool else g.back.size
             self.assertEqual(len(s["singles"]), 6)
             self.assertGreater(s["multiple"]["bets"], 1)
             self.assertEqual(s["multiple"]["cost"], s["multiple"]["bets"] * g.price)
             for c in s["singles"]:
-                self.assertEqual(len(c["front"]), g.front.size)
-                self.assertEqual(len(c["back"]), g.back.size)
+                self.assertEqual(len(c["front"]), n_front)
+                self.assertEqual(len(c["back"]), n_back)
                 self.assertTrue(all(g.front.low <= x <= g.front.high for x in c["front"]))
                 if g.front.combination:
                     self.assertEqual(c["front"], sorted(c["front"]))
-                    self.assertEqual(len(set(c["front"])), g.front.size)
+                    self.assertEqual(len(set(c["front"])), n_front)
             m = s["multiple"]
-            if g.front.combination:
+            if g.is_pool:
+                self.assertEqual(len(m["front"]), 11)
+                self.assertEqual(m["bets"], 11)
+                self.assertEqual(s["total_bets"], 66)
+                self.assertEqual(s["total_cost"], 132)
+                self.assertTrue(s["news_match"])
+                self.assertEqual(len(s["multiple_groups"]), 6)
+                self.assertEqual(len(s["pool"]["front"]), 20)
+            elif g.front.combination:
                 self.assertEqual(m["front"], sorted(m["front"]))
                 self.assertEqual(m["bets"], math.comb(len(m["front"]), g.front.size)
                                  * math.comb(len(m["back"]), g.back.size))
+                self.assertEqual(len(s["cost_table"]), 3)
             else:
                 self.assertEqual(m["bets"], 4)  # 2 个数位各双选
-            self.assertEqual(len(s["cost_table"]), 3)
+                self.assertEqual(len(s["cost_table"]), 3)
+
+    def test_kl8_prize_math(self):
+        from pickwise.kl8 import prize_math
+        p = prize_math("kl8")
+        self.assertEqual(p["jackpot_odds"], "1 / 8,911,711")
+        self.assertAlmostEqual(p["return_rate"], 56.984, places=2)
+        self.assertAlmostEqual(p["expected_prize"], 1.139679, places=5)
+        self.assertEqual(len(p["rows"]), 11)
+        self.assertEqual(p["rows"][9]["prize"], 8000)
+        self.assertEqual(p["rows"][10]["prize"], 5_000_000)
+
+    def test_kl8_draws_and_recommendations(self):
+        from pickwise.analyze import analyze_game
+        from pickwise.fetch import validate_draws
+        from pickwise.analyze import load_draws
+        rows = load_draws("kl8")
+        errors, _ = validate_draws("kl8", rows)
+        self.assertEqual(errors[:5], [])
+        for d in rows:
+            self.assertEqual(len(d["front"]), 20)
+            self.assertEqual(d["back"], [])
+            self.assertEqual(d["front"], sorted(set(d["front"])))
+        a = analyze_game("kl8")
+        self.assertTrue(a["is_pool"])
+        self.assertEqual(a["pick_size"], 10)
+        self.assertEqual(a["structure"]["type"], "pool")
+        self.assertEqual(a["zones"]["back"]["not_applicable"], True)
 
     def test_reproducible(self):
         a = news_strategy("ssq", seed=99)
@@ -171,15 +210,17 @@ class TestWithRealData(unittest.TestCase):
     def test_recommendations_are_valid(self):
         for k in GAME_ORDER:
             g = game_of(k)
+            n_front = g.pick_size if g.is_pool else g.front.size
+            n_back = 0 if g.is_pool else g.back.size
             for st in STRATEGIES:
                 r = recommend(k, strategy=st, count=2, seed=42)
                 for c in r["combos"]:
-                    self.assertEqual(len(c["front"]), g.front.size)
-                    self.assertEqual(len(c["back"]), g.back.size)
+                    self.assertEqual(len(c["front"]), n_front)
+                    self.assertEqual(len(c["back"]), n_back)
                     self.assertTrue(all(g.front.low <= x <= g.front.high for x in c["front"]))
                     self.assertTrue(all(g.back.low <= x <= g.back.high for x in c["back"]))
                     if g.front.combination:
-                        self.assertEqual(len(set(c["front"])), g.front.size)
+                        self.assertEqual(len(set(c["front"])), n_front)
                         self.assertEqual(c["front"], sorted(c["front"]))
 
     def test_reproducible_seed(self):
@@ -199,6 +240,19 @@ class TestWithRealData(unittest.TestCase):
         self.assertEqual(dist_total, b["rounds"])
         recomputed = sum(int(k) * v for k, v in s["distribution"].items()) / b["rounds"]
         self.assertAlmostEqual(s["mean_hits"], recomputed, places=3)
+
+    def test_backtest_conclusion_handles_significant_result(self):
+        """覆盖 |z|>=2 的结论分支，且该优势换种子后不可复现。"""
+        from pickwise.backtest import backtest
+        b = backtest("kl8", rounds=200, window=250, seed=20261105)
+        self.assertIsInstance(b["conclusion"], str)
+        self.assertIn("理论返奖率", b["conclusion"])
+        self.assertNotIn("不换算奖金", b["conclusion"])
+        if any(v.get("significant") for v in b["strategies"].values()):
+            self.assertIn("假阳性", b["conclusion"])
+        alt = [abs(backtest("kl8", rounds=200, window=250, seed=s)
+                   ["strategies"]["balanced"]["z_vs_random"]) for s in (1, 42)]
+        self.assertFalse(all(z >= 2 for z in alt), "显著优势不应在多个种子下稳定复现")
 
     def test_build_data_has_full_history_and_top_pick(self):
         from pickwise.report import build_data

@@ -152,6 +152,11 @@ def _sample_single(game, pool, rng, field):
 def news_strategy(game_key, groups=6, expand=2, window=100, seed=20261105, draws=None):
     """生成「单式 + 复式」推荐，并给出注数、金额与理论概率。"""
     game = game_of(game_key)
+    if game.is_pool:
+        # 单一号池玩法（快乐8 选十）：按原玩法完整复刻新闻中的 80→20→6 组 11 码复式
+        from .kl8 import news_strategy_pool
+        return news_strategy_pool(game_key, groups=groups, window=window,
+                                  seed=seed, draws=draws)
     draws = draws if draws is not None else load_draws(game_key)
     if len(draws) < 60:
         raise RuntimeError("历史数据不足，请先运行 fetch")
@@ -280,5 +285,6 @@ def news_strategy(game_key, groups=6, expand=2, window=100, seed=20261105, draws
 
 
 def news_strategy_all(keys=None, **kwargs):
-    keys = keys or ("ssq", "dlt", "qxc")
+    from .config import GAME_ORDER
+    keys = keys or list(GAME_ORDER)
     return {k: news_strategy(k, **kwargs) for k in keys}

@@ -29,6 +29,8 @@ def match_counts(game, pred_front, pred_back, actual_front, actual_back):
 
 
 def theoretical_hits(game):
+    if game.is_pool:
+        return round(game.pick_size * game.front.size / game.front.slots, 4)
     if game.front.combination:
         fe = game.front.size ** 2 / game.front.slots
         be = game.back.size ** 2 / game.back.slots
@@ -44,8 +46,10 @@ def backtest(game_key, rounds=200, window=250, strategies=DEFAULT_STRATEGIES, se
     max_rounds = len(draws) - 100
     rounds = max(10, min(rounds, max_rounds))
     start = len(draws) - rounds
-    results = {s: {"hits": [], "front_hits": [], "back_hits": [], "combos": 0}
+    results = {s: {"hits": [], "front_hits": [], "back_hits": [], "combos": 0,
+                   "prizes": []}
                for s in strategies}
+    max_hits = game.pick_size if game.is_pool else game.front.size + game.back.size
     structure = None
     for i in range(start, len(draws)):
         train = draws[max(0, i - window):i]
@@ -65,6 +69,8 @@ def backtest(game_key, rounds=200, window=250, strategies=DEFAULT_STRATEGIES, se
             results[st]["hits"].append(fh + bh)
             results[st]["front_hits"].append(fh)
             results[st]["back_hits"].append(bh)
+            results[st]["prizes"].append(
+                game.prize_map.get(fh, 0) if game.is_pool else 0)
             results[st]["combos"] += 1
 
     base = results["random"]["hits"] if "random" in results else None
@@ -80,8 +86,11 @@ def backtest(game_key, rounds=200, window=250, strategies=DEFAULT_STRATEGIES, se
             "mean_back_hits": round(statistics.mean(r["back_hits"]), 4),
             "max_hits": max(h),
             "high_hit_rounds": sum(1 for x in h if x >= 4),
-            "full_matches": sum(1 for x in h if x == game.front.size + game.back.size),
-            "distribution": {str(k): r["hits"].count(k) for k in range(game.front.size + game.back.size + 1)},
+            "full_matches": sum(1 for x in h if x == max_hits),
+            "distribution": {str(k): r["hits"].count(k) for k in range(max_hits + 1)},
+            "prize_total": sum(r["prizes"]),
+            "cost_total": len(h) * game.price,
+            "return_rate": round(sum(r["prizes"]) / (len(h) * game.price) * 100, 2),
         }
         if base is not None:
             diffs = [a - b for a, b in zip(h, base)]
@@ -98,11 +107,24 @@ def backtest(game_key, rounds=200, window=250, strategies=DEFAULT_STRATEGIES, se
     conclusion = (
         f"最近 {rounds} 期严格样本外回测：纯随机基线平均命中 {summary['random']['mean_hits'] if 'random' in summary else 'N/A'} 个，"
         f"理论期望 {exp} 个。"
-        + (f"策略 {', '.join(STRATEGIES[s]['label'] for s in beats)} 出现统计显著优势，需警惕多重比较与样本量不足。"
+        + (f"策略 {', '.join(s['label'] for s in beats)} 在该种子下出现统计显著优势（|z|≥2）；"
+           "四个彩种 × 三种策略共 12 次检验，按 5% 水平出现假阳性并不意外，"
+           "更换 --seed 复核通常即消失，不代表具备预测能力。"
            if beats else
            "其余各策略与随机基线的差异均未达到统计显著（|z|<2），说明历史冷热号加权没有带来超过随机的命中能力。")
-        + " 回测只统计号码命中个数，不换算奖金；命中个数与奖级奖金并非线性关系。"
     )
+    theoretical_return_rate = None
+    if game.is_pool:
+        conclusion += " 本彩种已把命中数按官方奖级换算为奖金、累计投入与实际返奖率。"
+    else:
+        conclusion += " 回测只统计号码命中个数，不换算奖金；命中个数与奖级奖金并非线性关系。"
+    if game.is_pool:
+        from .kl8 import prize_math
+        pm = prize_math(game_key)
+        theoretical_return_rate = pm["return_rate"]
+        conclusion += (f" 按官方「选十」奖级把命中数换算成奖金，理论返奖率约 {pm['return_rate']:.2f}%"
+                       f"（每注期望奖金 ¥{pm['expected_prize']:.4f}）；回测期数少、方差极大，"
+                       "少数高额奖级会主导结果，属正常随机波动。")
     return {
         "game": game_key,
         "name": game.name,
@@ -110,11 +132,14 @@ def backtest(game_key, rounds=200, window=250, strategies=DEFAULT_STRATEGIES, se
         "window": window,
         "seed": seed,
         "theoretical_mean_hits": exp,
+        "is_pool": game.is_pool,
+        "theoretical_return_rate": theoretical_return_rate,
         "strategies": summary,
         "conclusion": conclusion,
     }
 
 
 def backtest_all(keys=None, rounds=200, window=250, seed=20261105):
-    keys = keys or ("ssq", "dlt", "qxc")
+    from .config import GAME_ORDER
+    keys = keys or list(GAME_ORDER)
     return {k: backtest(k, rounds=rounds, window=window, seed=seed) for k in keys}

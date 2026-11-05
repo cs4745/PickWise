@@ -209,10 +209,10 @@ function svgLine(values,labels,opt={}){
   return `<svg viewBox="0 0 ${W} ${H}" role="img">${grid}<path d="${path}" fill="none" stroke="${opt.color||COL.primary}" stroke-width="1.7" stroke-linejoin="round"/>${xl}</svg>`;
 }
 function balls(front,back,key,small=false){
-  const fc=key==='qxc'?COL.purple:COL.red;
-  const f=front.map(x=>`<span class="ball ${key==='qxc'?'purple':'red'} ${small?'small':''}">${String(x).padStart(2,'0')}</span>`).join('');
-  const b=back.map(x=>`<span class="ball blue ${small?'small':''}">${String(x).padStart(2,'0')}</span>`).join('');
-  return `<div class="balls">${f}<span style="color:#a7b4c9;font-weight:700">+</span>${b}</div>`;
+  const f=(front||[]).map(x=>`<span class="ball ${key==='qxc'?'purple':'red'} ${small?'small':''}">${String(x).padStart(2,'0')}</span>`).join('');
+  const hasBack=back&&back.length>0;
+  const b=hasBack?back.map(x=>`<span class="ball blue ${small?'small':''}">${String(x).padStart(2,'0')}</span>`).join(''):'';
+  return `<div class="balls">${f}${hasBack?'<span style="color:#a7b4c9;font-weight:700">+</span>'+b:''}</div>`;
 }
 function hotColdTable(z,unit){
   const rows=(items,tag)=>items.map(x=>`<tr><td><span class="tag ${tag}">${String(x.number).padStart(2,'0')}</span></td>
@@ -298,7 +298,7 @@ function supportList(tp,limit){
     .map(x=>`<span>${String(x.number).padStart(2,'0')} 被 ${x.count}/${tp.total_combos} 组选中</span>`).join('')}</div>`;
 }
 function topPicksSection(){
-  const order=['ssq','dlt','qxc'];
+  const order=ORDER;
   return `<h2><span class="section-no">1</span>最推荐号码</h2>
    <p class="hint">把全部策略的参考组合汇总，提取出现频率最高的数字，按彩种各组成一组。这是对「建议」本身的再统计（元统计），不是预测。</p>
    <div class="pick-grid">${order.map(k=>{const tp=G[k].top_pick,a=G[k].analysis;
@@ -347,9 +347,12 @@ function historyTable(k){
   const rows=q?all.filter(r=>r[0].indexOf(q)>=0||String(r[1]).indexOf(q)>=0):all;
   const pages=Math.max(1,Math.ceil(rows.length/HIST_PAGE));
   st.page=Math.min(Math.max(1,st.page),pages);
-  const body=rows.slice((st.page-1)*HIST_PAGE,st.page*HIST_PAGE).map(r=>
-    `<tr><td class="num">${esc(r[0])}</td><td>${esc(r[1]||'—')}</td>
-     <td>${balls(r[2].split(' ').map(Number),r[3].split(' ').map(Number),k,true)}</td></tr>`).join('');
+  const body=rows.slice((st.page-1)*HIST_PAGE,st.page*HIST_PAGE).map(r=>{
+    const ff=r[2]?r[2].split(' ').filter(Boolean).map(Number):[];
+    const bb=r[3]?r[3].split(' ').filter(Boolean).map(Number):[];
+    return `<tr><td class="num">${esc(r[0])}</td><td>${esc(r[1]||'—')}</td>
+     <td>${balls(ff,bb,k,true)}</td></tr>`;
+  }).join('');
   return `<div class="hist-wrap"><table><thead><tr><th>期号</th><th>开奖日期</th><th>开奖号码</th></tr></thead>
     <tbody>${body||'<tr><td colspan="3">没有匹配的记录</td></tr>'}</tbody></table></div>
    <div class="pager">
@@ -378,8 +381,9 @@ function newsDigestSection(){
     <tr><th>结构验算</th><td>${f.checks.map(x=>'<div>· '+esc(x)+'</div>').join('')}</td></tr></table>
    <h3 class="sub-h">还原出的三层模式</h3>
    <div class="layer-flow">${f.layers.map((x,i)=>`<div class="layer"><b>第 ${i+1} 层</b>${esc(x)}</div>`).join('')}</div>
-   <div class="note"><b>本项目怎么借鉴</b>　${esc(f.honest_note)} 文章讲的是快乐 8「选十」，本项目不含该玩法；
-    下面把同样的三层结构迁移到双色球 / 大乐透 / 七星彩，形成单式与复式演示。</div>
+   <div class="note"><b>本项目怎么借鉴</b>　${esc(f.honest_note)} 文章讲的是快乐 8「选十」，
+    本项目已新增该玩法完整支持：切到「快乐8（选十）」标签页可按原玩法复刻「80→20 候选、6 组 11 码复式、66 注 ¥132」；
+    双色球 / 大乐透 / 七星彩则把同样的三层结构迁移过去。</div>
    <div class="note strong"><b>原文官方提醒</b>　${esc(n.official_warning)}<br>
     另需注意：文中购彩者自述「手头有些债务压力」。在财务压力下试图靠购彩翻身风险极高，
     不要把个例中奖当成可复制的方法，更不要因此增加投入。</div>`;
@@ -429,6 +433,116 @@ function newsStrategySection(a,key){
      并没有任何技巧优势。本区块所有号码均为统计演示，<b>不构成购买建议</b>。</div>
   </section>`;
 }
+// ---------------------------------------------------------------- 快乐8 专属面板
+function kl8NewsSection(s,key){
+  const singles=s.singles.map(x=>`<div class="single-row"><span class="idx">第 ${x.index} 组</span>
+    ${balls(x.front,[],key,true)}
+    <span class="struct">和值 ${x.structure.sum} · 重号 ${x.structure.repeat} · 连号 ${x.structure.consecutive} · 四区 ${esc(x.structure.four_zone)}</span></div>`).join('');
+  const groups=s.multiple_groups.map(g=>`<div class="single-row"><span class="idx">第 ${g.index} 组</span>
+    ${balls(g.numbers,[],key,true)}<span class="struct">${g.bets} 注 · ¥${g.cost}</span></div>`).join('');
+  const costRows=s.cost_table.map(c=>`<tr><td>${esc(c.label)}</td><td class="num">${c.bets}</td>
+    <td class="num">¥${c.cost}</td><td class="num">×${c.multiple}</td>
+    <td class="num">${c.multiple} / ${esc(s.base_odds.split('/ ')[1]||'')}</td></tr>`).join('');
+  return `<section class="box"><h2>新闻模式 · 原玩法完整复刻</h2>
+   <p class="hint">这一节不再是「迁移」，而是按快乐 8 选十的原始规则复刻新闻中的买法。仅为统计演示，不是购买建议。</p>
+   <div class="layer-flow">${s.layers.map((x,i)=>`<div class="layer"><b>第 ${i+1} 层</b>${esc(x)}</div>`).join('')}</div>
+   <div class="note strong"><b>与新闻数字对齐</b>　6 组 11 码选十复式 = 6 × C(11,10) = ${s.total_bets} 注 × ¥${s.price} = <b>¥${s.total_cost}</b>，
+    ${s.news_match?'与文中「花了 130 多块钱」完全一致。':'与新闻金额一致。'}
+    新闻那张中奖票即其中一组：命中 10 个号 → 中十 1 注（500 万）+ 中九 10 注（10 × 8000 元）= 508 万。</div>
+   <h3 class="sub-h">第一层 · 20 个候选号（80 个号缩到 25%）</h3>
+   <div class="single-row">${balls(s.pool.front,[],key,true)}</div>
+   <h3 class="sub-h">第二层 · ${s.singles.length} 组单式（每组选 10 个）</h3>
+   ${singles}
+   <h3 class="sub-h">第三层 · ${s.multiple_groups.length} 组 11 码「选十」复式</h3>
+   ${groups}
+   <div class="multi-box"><b>合计 ${s.total_bets} 注 / ¥${s.total_cost}</b>
+     <div class="cost">每组 11 码 = C(11,10) = 11 注 = ¥22；6 组 = 66 注 = ¥132</div></div>
+   <h3 class="sub-h">成本与概率对照</h3>
+   <table><tr><th>方式</th><th>注数</th><th>金额</th><th>概率 / 成本倍数</th><th>选十中十概率</th></tr>${costRows}</table>
+   <div class="note strong"><b>必须说清楚</b>　${esc(s.notice)}</div>
+  </section>`;
+}
+function kl8PrizeSection(p,a){
+  const rows=p.rows.map(r=>`<tr><td>${esc(r.label)}</td><td>${esc(r.level)}</td>
+    <td class="num">${r.odds}</td><td class="num">${r.probability.toFixed(9)}</td>
+    <td class="num">¥${r.prize.toLocaleString()}</td>
+    <td class="num">${r.contribution.toFixed(6)}</td></tr>`).join('');
+  return `<section class="box"><h2>官方奖级 · 理论概率与返奖率（选十玩法）</h2>
+   <p class="hint">${esc(p.official_note)}　·　规则来源：中国福彩网《中国福利彩票快乐8游戏规则》。</p>
+   <table><tr><th>命中</th><th>奖级</th><th>概率约</th><th>精确概率</th><th>单注奖金</th><th>期望贡献(元)</th></tr>${rows}</table>
+   <div class="kv" style="margin-top:14px"><span>总组合数 C(80,10) <b>${p.total_combos.toLocaleString()}</b></span>
+    <span>选十中十 <b>${esc(p.jackpot_odds)}</b></span>
+    <span>每注期望奖金 <b>¥${p.expected_prize}</b></span>
+    <span>理论返奖率 <b>${p.return_rate}%</b></span>
+    <span>官方计提 <b>${p.official_rate}%</b></span></div>
+   <div class="note strong">${esc(p.note)} 该数值与官方规则口径吻合，也说明奖级表录入无误。</div>
+  </section>`;
+}
+function kl8Panel(key){
+  const g=G[key],a=g.analysis,zf=a.zones.front,s=a.structure,b=g.backtest;
+  const st=g.news_strategy,p=g.prize;
+  const statCards=`<div class="kv"><span>覆盖期数 <b>${a.count.toLocaleString()}</b></span>
+   <span>期号范围 <b>${esc(a.earliest.issue)} ~ ${esc(a.latest.issue)}</b></span>
+   <span>开奖频率 <b>${esc(a.draw_days)}</b></span>
+   <span>单注金额 <b>¥${a.price}</b></span>
+   <span>选十中十 <b>${esc(g.recommendations.balanced.jackpot_odds)}</b></span></div>`;
+  const eraFront=a.era_check.front.map(x=>`<tr><td>${esc(x.label)}</td><td class="num">${x.count}</td>
+    <td class="num">${x.chi2}</td><td class="num">${x.pvalue}</td>
+    <td>${x.deviates?'<span class="tag hot">偏离</span>':'<span class="tag ok">一致</span>'}</td></tr>`).join('');
+  const oddsDist=`<table><tr><th>奇数个数</th><th>期数</th></tr>`+
+    s.odd_count.labels.map((l,i)=>`<tr><td>${l}</td><td class="num">${s.odd_count.counts[i]}</td></tr>`).join('')+`</table>`;
+  return `<div class="panel" id="p-${key}">
+   ${topPickSection(a,key)}
+   ${recommendSection(a,key)}
+   <section class="box"><h2><span class="section-no">3</span>最近号码</h2>
+    <p class="hint">最新开奖 · 第 ${esc(a.latest.issue)} 期 ${a.latest.date?'（'+esc(a.latest.date)+'）':''}，每期开出 20 个号</p>
+    ${balls(a.latest.front,[],key,true)}
+    <h3 class="sub-h">最近 ${g.recent.length} 期开奖记录</h3>
+    <table class="recent-table"><tr><th>期号</th><th>日期</th><th>20 个开奖号</th></tr>
+     ${g.recent.map(x=>`<tr><td class="num">${esc(x.issue)}</td><td>${esc(x.date||'—')}</td>
+       <td>${balls(x.front,[],key,true)}</td></tr>`).join('')}</table></section>
+   ${historySection(a,key)}
+   ${kl8NewsSection(st,key)}
+   ${kl8PrizeSection(p,a)}
+   <section class="box"><h2>数据说明 · ${esc(a.name)}</h2>
+    <p class="hint">${esc(a.rules)}　|　${esc(a.org)}</p>
+    ${statCards}
+    <div class="note"><b>数据源</b>　${esc(a.source_desc)}<br><b>数据口径提示</b>　${esc(a.data_notes)}</div></section>
+   <section class="box"><h2>热号 / 冷号（开奖号 1~80）</h2>
+    <p class="hint">每期开出 20 个号，因此每个号的理论出现率为 25%；热冷按近 ${zf.recent_window} 期排序。</p>
+    ${hotColdTable(zf,zf.name)}
+    ${freqChart(zf,'开奖号')}
+    ${omissionChart(zf,'开奖号')}
+    <div class="note"><b>均匀性检验</b>　χ²=${zf.chi2.stat}，df=${zf.chi2.df}，p=${zf.chi2.pvalue} —— ${esc(zf.chi2.conclusion)}</div>
+    <h3 class="sub-h">分段均匀性检验（每 3 年一段）</h3>
+    <table><tr><th>年份</th><th>期数</th><th>χ²</th><th>p 值</th><th>结论</th></tr>${eraFront}</table>
+   </section>
+   <section class="box"><h2>开奖号结构分布</h2>
+    <p class="hint">20 个开奖号的和值、奇偶、四区分布、连号与重号；仅描述历史形态，无预测作用。</p>
+    <h3 class="sub-h">20 个开奖号之和</h3>
+    <div class="chart">${svgBar(s.sum.hist.labels,s.sum.hist.counts,{color:COL.primary,dec:0,height:200})}</div>
+    <div class="kv"><span>均值 <b>${s.sum.mean}</b></span><span>范围 <b>${s.sum.min} ~ ${s.sum.max}</b></span>
+      <span>与上期重号均值 <b>${s.repeat_mean}</b></span><span>独立随机理论值 <b>${s.repeat_theoretical}</b></span>
+      <span>含连号比例 <b>${fmt(s.consecutive_rate*100,2)}%</b></span>
+      <span>和值 lag-1 自相关 <b>${s.sum_lag1_corr}</b></span></div>
+    <h3 class="sub-h">近 ${a.trend.length} 期和值走势</h3>
+    <div class="chart">${svgLine(s.sum.values,a.trend.map(t=>t.issue),{color:COL.blue})}</div>
+    <div class="grid2" style="margin-top:12px"><div><h3 class="sub-h">奇数个数分布</h3>${oddsDist}</div>
+      <div><h3 class="sub-h">最常见四区比（1-20 : 21-40 : 41-60 : 61-80）</h3>
+       <table><tr><th>区间比</th><th>出现期数</th></tr>
+       ${s.zone_ratio_top.map(x=>`<tr><td>${esc(x.ratio)}</td><td class="num">${x.count}</td></tr>`).join('')}</table></div></div>
+   </section>
+   ${backtestSection(b)}
+   <section class="box"><h2>回测奖金换算</h2>
+    <table><tr><th>策略</th><th>命中数均值</th><th>累计奖金</th><th>累计投入</th><th>实际返奖率</th></tr>
+     ${Object.values(b.strategies).map(x=>`<tr><td>${esc(x.label)}</td><td class="num">${x.mean_hits}</td>
+       <td class="num">¥${x.prize_total.toLocaleString()}</td><td class="num">¥${x.cost_total}</td>
+       <td class="num">${x.return_rate}%</td></tr>`).join('')}</table>
+    <div class="note">理论返奖率 ${b.theoretical_return_rate}%（每注 ¥${p.expected_prize}）。
+      回测只有 ${b.rounds} 期，方差极大，个别小额奖级会主导结果；长期大样本才会收敛到理论值。</div></section>
+   ${rationalAdviceSection(a,key)}
+  </div>`;
+}
 function gamePanel(key){
   const g=G[key],a=g.analysis,zf=a.zones.front,zb=a.zones.back,s=a.structure;
   const statCards=`
@@ -443,9 +557,9 @@ function gamePanel(key){
   return `<div class="panel ${key==='ssq'?'on':''}" id="p-${key}">
    ${topPickSection(a,key)}
    ${recommendSection(a,key)}
-   ${newsStrategySection(a,key)}
    ${recentSection(a,key)}
    ${historySection(a,key)}
+   ${newsStrategySection(a,key)}
    <section class="box"><h2>数据说明 · ${esc(a.name)} <span style="font-size:12px;color:var(--ink3);font-weight:400">${esc(a.org)}</span></h2>
     <p class="hint">选号规则：${esc(a.rules)}　·　${esc(a.draw_days)}开奖　·　单注 ¥${a.price}</p>
     ${statCards}
@@ -494,20 +608,24 @@ function gamePanel(key){
       s.third_ratio_top.map(x=>`<tr><td>${esc(x.ratio)}</td><td class="num">${x.count}</td></tr>`).join('')+`</table>`:''}
    </section>
    ${backtestSection(g.backtest)}
-   <section class="box"><h2>关于「买什么」的认真回答</h2>
+   ${rationalAdviceSection(a,key)}
+  </div>`;
+}
+function rationalAdviceSection(a,key){
+  const odds=esc(G[key].recommendations.balanced.jackpot_odds);
+  return `<section class="box"><h2>关于「买什么」的认真回答</h2>
     <p class="hint">这是本工具唯一会给出的购买建议，它不基于任何号码预测。</p>
     <table><tr><th style="width:150px">问题</th><th>基于数据的回答</th></tr>
-      <tr><td>有没有必中 / 提高中奖率的选号法？</td><td>没有。每期开奖独立，任意一组号码的单注中奖概率完全相同（本彩种一等奖 ${esc(g.recommendations.balanced.jackpot_odds)}）。上面的回测也显示统计选号与纯随机无显著差异。</td></tr>
+      <tr><td>有没有必中 / 提高中奖率的选号法？</td><td>没有。每期开奖独立，任意一组号码的单注中奖概率完全相同（本彩种头奖 ${odds}）。上面的回测也显示统计选号与纯随机无显著差异。</td></tr>
       <tr><td>长期买彩票能赚钱吗？</td><td>不能。按彩票资金分配规则，返奖奖金只占销售额的一部分，另含公益金与发行费用，单注期望回报低于投入；投入越多，长期损失越接近确定。</td></tr>
       <tr><td>如果仍想偶尔买呢？</td><td>把它当娱乐消费：先设定每月固定上限并严格执行，只用闲钱，不追号、不加倍、不借贷、不把「差一个号」当作继续投入的理由。</td></tr>
       <tr><td>什么情况下应当停止？</td><td>超出预算、试图靠购彩弥补亏损、影响工作生活或人际关系时请立即停止并主动寻求帮助。未满 18 周岁禁止购彩。</td></tr>
     </table>
     <div class="note strong">最优的「买什么」是量力而行，或者不买。本工具不会告诉您该押哪一组号能赢，因为那样说是假的。</div>
-   </section>
-  </div>`;
+   </section>`;
 }
 // ---------------------------------------------------------------- 渲染
-const ORDER=['ssq','dlt','qxc'];
+const ORDER=__ORDER__;
 let activeGame='ssq';
 function renderAll(){
   document.getElementById('top-picks').innerHTML=topPicksSection();
@@ -520,7 +638,8 @@ function renderAll(){
      <div class="d">历史冷热号未带来显著命中优势</div></div>`;
   document.getElementById('tabs').innerHTML=ORDER.map(k=>
     `<button class="tab ${k===activeGame?'on':''}" data-act="tab" data-k="${k}">${esc(G[k].analysis.name)}</button>`).join('');
-  document.getElementById('panels').innerHTML=ORDER.map(k=>gamePanel(k)).join('');
+  document.getElementById('panels').innerHTML=ORDER.map(k=>
+    G[k].analysis.is_pool?kl8Panel(k):gamePanel(k)).join('');
   Object.keys(histState).forEach(k=>delete histState[k]);
   const gt=document.getElementById('gen-time');
   if(gt)gt.textContent=D.meta.generated_at||'';
@@ -603,6 +722,21 @@ def extract_top_pick(game, recommendations):
         raise ValueError("没有可用的参考组合，无法提取最推荐号码")
     total = len(combos)
 
+    if game.is_pool:
+        # 单一号池：只提 pick_size 个号（选十玩法），没有后区
+        counter = Counter(v for c in combos for v in c["front"])
+        ranked = sorted(game.front.numbers, key=lambda n: (-counter[n], n))[:game.pick_size]
+        chosen = sorted(ranked)
+        return {
+            "front": chosen, "back": [],
+            "front_support": [{"number": n, "count": counter[n],
+                               "rate": round(counter[n] / total, 3)} for n in chosen],
+            "back_support": [],
+            "total_combos": total,
+            "strategy_count": len(recommendations),
+            "note": "由全部策略的参考组合按出现频率汇总而成，仅为元统计演示，不提高中奖概率。",
+        }
+
     def by_frequency(zone, field):
         counter = Counter(v for c in combos for v in c[field])
         ranked = sorted(zone.numbers, key=lambda n: (-counter[n], n))
@@ -666,6 +800,7 @@ def build_data(keys=None, rec_count=3, rounds=200, window=250, seed=20261105,
         recent = [{"issue": d["issue"], "date": d["date"],
                    "front": d["front"], "back": d["back"]}
                   for d in newest_first[:10]]
+        from .kl8 import prize_math
         games[k] = {
             "analysis": analyses[k],
             "recommendations": recs[k],
@@ -674,6 +809,7 @@ def build_data(keys=None, rec_count=3, rounds=200, window=250, seed=20261105,
             "recent": recent,
             "history": history,
             "news_strategy": strategies[k],
+            "prize": prize_math(k) if game.is_pool else None,
         }
     return {
         "meta": {
@@ -690,9 +826,11 @@ def generate(data=None, filename="report.html"):
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     data = data or build_data()
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")
+    from .config import GAME_ORDER
     html = (TEMPLATE.replace("__DATA__", payload)
             .replace("__DISCLAIMER__", DISCLAIMER)
             .replace("__VERSION__", __version__)
+            .replace("__ORDER__", json.dumps(list(GAME_ORDER)))
             .replace("__TIME__", data["meta"]["generated_at"]))
     path = OUTPUT_DIR / filename
     path.write_text(html, encoding="utf-8")
