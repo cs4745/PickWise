@@ -15,6 +15,7 @@ from pickwise.analyze import chi2_sf, load_draws, omission_stats, zone_counts  #
 from pickwise.config import DATA_DIR, GAMES, GAME_ORDER, game_of  # noqa: E402
 from pickwise.fetch import cross_check, issue_sort_key, validate_draws  # noqa: E402
 from pickwise.recommend import STRATEGIES, jackpot_odds, recommend  # noqa: E402
+from pickwise.report import extract_top_pick  # noqa: E402
 
 HAS_DATA = all((DATA_DIR / f"{k}.csv").exists() for k in GAME_ORDER)
 
@@ -84,6 +85,40 @@ class TestCounters(unittest.TestCase):
         self.assertEqual(om[1]["current"], 0)
 
 
+class TestTopPick(unittest.TestCase):
+    @staticmethod
+    def combo(front, back, idx=1):
+        return {"index": idx, "front": front, "back": back,
+                "front_text": "", "back_text": "", "reason": ""}
+
+    def test_combination_picks_most_frequent(self):
+        recs = {
+            "a": {"combos": [self.combo([1, 2, 3, 4, 5, 6], [7], 1),
+                             self.combo([1, 2, 3, 4, 5, 7], [8], 2)]},
+            "b": {"combos": [self.combo([1, 2, 3, 4, 5, 6], [7], 1)]},
+        }
+        tp = extract_top_pick(game_of("ssq"), recs)
+        self.assertEqual(tp["total_combos"], 3)
+        self.assertEqual(tp["front"], [1, 2, 3, 4, 5, 6])
+        self.assertEqual(tp["back"], [7])
+        self.assertEqual(tp["front_support"][0]["count"], 3)
+        self.assertEqual(len(set(tp["front"])), 6)
+
+    def test_digit_game_picks_by_position(self):
+        recs = {
+            "a": {"combos": [self.combo([1] * 6, [5]), self.combo([1] * 6, [6])]},
+            "b": {"combos": [self.combo([2] * 6, [5])]},
+        }
+        tp = extract_top_pick(game_of("qxc"), recs)
+        self.assertEqual(tp["front"], [1] * 6)
+        self.assertEqual(tp["back"], [5])
+        self.assertEqual(tp["front_support"][0]["position"], 1)
+
+    def test_empty_raises(self):
+        with self.assertRaises(ValueError):
+            extract_top_pick(game_of("ssq"), {})
+
+
 @unittest.skipUnless(HAS_DATA, "需要先运行 python pickwise.py fetch")
 class TestWithRealData(unittest.TestCase):
     def test_all_draws_pass_validation(self):
@@ -122,6 +157,17 @@ class TestWithRealData(unittest.TestCase):
         self.assertEqual(dist_total, b["rounds"])
         recomputed = sum(int(k) * v for k, v in s["distribution"].items()) / b["rounds"]
         self.assertAlmostEqual(s["mean_hits"], recomputed, places=3)
+
+    def test_build_data_has_full_history_and_top_pick(self):
+        from pickwise.report import build_data
+        data = build_data(keys=["ssq"], rec_count=2, rounds=20, window=80, seed=1)
+        g = data["games"]["ssq"]
+        self.assertEqual(len(g["history"]), g["analysis"]["count"])
+        self.assertEqual(len(g["recent"]), 10)
+        self.assertEqual(len(g["top_pick"]["front"]), 6)
+        self.assertEqual(len(g["top_pick"]["back"]), 1)
+        self.assertEqual(g["top_pick"]["total_combos"], 8)  # 4 策略 × 2 组
+        self.assertTrue(g["history"][0][0] >= g["history"][-1][0])
 
     def test_report_generation(self):
         from pickwise.report import generate

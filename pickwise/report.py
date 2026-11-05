@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+from collections import Counter
 
 from . import DISCLAIMER, __version__
 from .backtest import DEFAULT_STRATEGIES, backtest_all
-from .config import OUTPUT_DIR
+from .config import OUTPUT_DIR, game_of
 from .recommend import STRATEGIES, recommend_all
 
 TEMPLATE = r"""<!DOCTYPE html>
@@ -96,18 +97,46 @@ svg text{font-family:inherit}
 .kv b{color:var(--ink);font-weight:600}
 .legend{display:flex;gap:16px;font-size:11.5px;color:var(--ink3);margin:6px 0 0}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.update-btn{background:#fff;color:#1c3f86;border:0;border-radius:8px;padding:9px 18px;
+  font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.12);white-space:nowrap}
+.update-btn:hover{background:#eef4ff}
+.update-btn:disabled{opacity:.6;cursor:wait}
+.update-status{margin:10px 0 0;font-size:12.5px;color:#dce8ff;min-height:18px}
+.update-status code{background:rgba(255,255,255,.16);color:#fff;padding:2px 6px;border-radius:4px}
+.top-picks{background:linear-gradient(180deg,#fff,#fafcff);border-top:3px solid var(--primary)}
+.pick-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:14px;margin-top:10px}
+.pick-card{border:1px solid #dbe5f8;border-radius:10px;padding:15px 17px;background:#fbfdff}
+.pick-card h3{margin:0 0 2px;font-size:15px}
+.pick-card .meta{font-size:11.5px;color:var(--ink3)}
+.ball.large{width:46px;height:46px;font-size:17px}
+.support{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+.support span{font-size:11px;color:var(--ink2);background:#eef3fd;border-radius:5px;padding:2px 7px}
+.pager{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px;font-size:12.5px;color:var(--ink2)}
+.pager button,.pager input{border:1px solid var(--line);background:#fff;border-radius:6px;
+  padding:5px 10px;font-size:12.5px;color:var(--ink)}
+.pager button{cursor:pointer}
+.pager button:disabled{opacity:.4;cursor:default}
+.pager input{width:160px}
+.hist-wrap{max-height:520px;overflow:auto;border:1px solid var(--line);border-radius:8px}
+.hist-wrap thead th{position:sticky;top:0;z-index:1}
+.recent-table td:first-child{white-space:nowrap}
+.section-no{display:inline-block;width:22px;height:22px;line-height:22px;text-align:center;
+  background:var(--primary-soft);color:var(--primary);border-radius:6px;font-size:12px;margin-right:8px}
 </style>
 </head>
 <body>
 <header class="top"><div class="wrap">
   <div class="brand"><h1>买什么</h1><span class="en">PickWise</span>
-    <span class="ver">v__VERSION__ · 生成于 __TIME__</span></div>
+    <span class="ver">v__VERSION__ · 生成于 <span id="gen-time">__TIME__</span></span>
+    <button id="update-btn" class="update-btn" type="button" data-act="update">更新数据</button></div>
   <div class="sub">双色球 / 超级大乐透 / 七星彩 —— 历史开奖数据的统计分析与随机性研究工具</div>
+  <div class="update-status" id="update-status"></div>
 </div></header>
 <div class="wrap">
   <div class="disclaimer"><b>重要声明</b>　__DISCLAIMER__<br>
   本报告展示的「参考组合」只是历史统计加权的随机抽样结果，<b>不是预测，也不构成购买建议</b>；
   其单注中奖概率与任意一组手写号码完全相同。</div>
+  <section class="box top-picks" id="top-picks"></section>
   <div class="cards" id="cards"></div>
   <div class="tabs" id="tabs"></div>
   <div id="panels"></div>
@@ -119,8 +148,8 @@ svg text{font-family:inherit}
 </div>
 <script id="data" type="application/json">__DATA__</script>
 <script>
-const D=JSON.parse(document.getElementById('data').textContent);
-const G=D.games;
+let D=JSON.parse(document.getElementById('data').textContent);
+let G=D.games;
 const COL={red:'#e0484d',blue:'#2f7de1',purple:'#6f5bd6',warm:'#e8754b',cool:'#4b8bd8',
            primary:'#2b5cd9',grid:'#e8edf5',ink:'#4a5b78',green:'#1f9d6b'};
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -242,10 +271,91 @@ function eraTable(a){
    <div class="grid2"><div><b>${esc(a.zones.front.name)}</b><table>${head}${rows(e.front)}</table></div>
    <div><b>${esc(a.zones.back.name)}</b><table>${head}${rows(e.back)}</table></div></div>`;
 }
+// ---------------------------------------------------------------- 最推荐号码 / 推荐 / 最近 / 历史
+function topPickBalls(tp,key){
+  const cls=key==='qxc'?'purple':'red';
+  const f=tp.front.map((x,i)=>{const s=tp.front_support[i]||{};
+    return `<span class="ball ${cls} large" title="被 ${s.count||0}/${tp.total_combos} 组建议选中">${String(x).padStart(2,'0')}</span>`}).join('');
+  const b=tp.back.map((x,i)=>{const s=tp.back_support[i]||{};
+    return `<span class="ball blue large" title="被 ${s.count||0}/${tp.total_combos} 组建议选中">${String(x).padStart(2,'0')}</span>`}).join('');
+  return `<div class="balls">${f}<span style="color:#a7b4c9;font-weight:700">+</span>${b}</div>`;
+}
+function supportList(tp,limit){
+  return `<div class="support">${[...tp.front_support,...tp.back_support].slice(0,limit||99)
+    .map(x=>`<span>${String(x.number).padStart(2,'0')} 被 ${x.count}/${tp.total_combos} 组选中</span>`).join('')}</div>`;
+}
+function topPicksSection(){
+  const order=['ssq','dlt','qxc'];
+  return `<h2><span class="section-no">1</span>最推荐号码</h2>
+   <p class="hint">把全部策略的参考组合汇总，提取出现频率最高的数字，按彩种各组成一组。这是对「建议」本身的再统计（元统计），不是预测。</p>
+   <div class="pick-grid">${order.map(k=>{const tp=G[k].top_pick,a=G[k].analysis;
+     return `<div class="pick-card"><h3>${esc(a.name)}</h3>
+      <div class="meta">${tp.strategy_count} 种策略 · ${tp.total_combos} 组建议 · 最新第 ${esc(a.latest.issue)} 期</div>
+      ${topPickBalls(tp,k)}${supportList(tp,7)}</div>`}).join('')}</div>
+   <div class="note">频率高只说明「这些策略恰好都倾向这些数字」。<b>每期开奖独立</b>，
+   这组号码与任意一组手写号码的中奖概率完全相同；回测也显示统计选号并不优于纯随机。</div>`;
+}
+function topPickSection(a,key){
+  const tp=G[key].top_pick;
+  return `<section class="box pick-hero"><h2><span class="section-no">1</span>最推荐号码 · ${esc(a.name)}</h2>
+   <p class="hint">汇总 ${tp.strategy_count} 种策略共 ${tp.total_combos} 组参考组合，按${a.zones.front.combination?'号码被选中':'各数位出现'}频率取最高者组成一组。</p>
+   ${topPickBalls(tp,key)}
+   ${supportList(tp)}
+   <div class="note"><b>怎么读这组号码</b>　它只是对下面四类建议再做一次频率统计，
+   不代表它更可能开出。本彩种一等奖理论概率 ${esc(G[key].recommendations.balanced.jackpot_odds)}，任意号码都一样。</div>
+  </section>`;
+}
+function recommendSection(a,key){
+  const recs=Object.values(G[key].recommendations);
+  return `<section class="box"><h2><span class="section-no">2</span>推荐号码（${recs.length} 种策略 × ${recs[0].combos.length} 组）</h2>
+    <p class="hint">四组策略使用同一随机种子，便于对比；所有组合的单注中奖概率均为 ${esc(G[key].recommendations.balanced.jackpot_odds)}，完全相同。</p>
+    <div class="strat-grid">${recs.map(r=>stratCard(r,key)).join('')}</div>
+    <div class="note strong"><b>请理性看待</b>　${esc(G[key].recommendations.balanced.notice)}
+      这些「参考组合」是统计分析结果的可视化演示，<b>不是、也不应被当作购买建议</b>。</div>
+   </section>`;
+}
+function recentSection(a,key){
+  const r=G[key].recent;
+  return `<section class="box"><h2><span class="section-no">3</span>最近号码</h2>
+   <p class="hint">最新开奖 · 第 ${esc(a.latest.issue)} 期 ${a.latest.date?'（'+esc(a.latest.date)+'）':''}</p>
+   ${balls(a.latest.front,a.latest.back,key)}
+   <h3 class="sub-h">最近 ${r.length} 期开奖记录</h3>
+   <table class="recent-table"><tr><th>期号</th><th>开奖日期</th><th>开奖号码</th></tr>
+    ${r.map(x=>`<tr><td class="num">${esc(x.issue)}</td><td>${esc(x.date||'—')}</td>
+      <td>${balls(x.front,x.back,key,true)}</td></tr>`).join('')}
+   </table></section>`;
+}
+const HIST_PAGE=15;
+const histState={};
+function historyTable(k){
+  const all=G[k].history||[];
+  const st=histState[k]||(histState[k]={page:1,q:''});
+  const q=String(st.q||'').trim();
+  const rows=q?all.filter(r=>r[0].indexOf(q)>=0||String(r[1]).indexOf(q)>=0):all;
+  const pages=Math.max(1,Math.ceil(rows.length/HIST_PAGE));
+  st.page=Math.min(Math.max(1,st.page),pages);
+  const body=rows.slice((st.page-1)*HIST_PAGE,st.page*HIST_PAGE).map(r=>
+    `<tr><td class="num">${esc(r[0])}</td><td>${esc(r[1]||'—')}</td>
+     <td>${balls(r[2].split(' ').map(Number),r[3].split(' ').map(Number),k,true)}</td></tr>`).join('');
+  return `<div class="hist-wrap"><table><thead><tr><th>期号</th><th>开奖日期</th><th>开奖号码</th></tr></thead>
+    <tbody>${body||'<tr><td colspan="3">没有匹配的记录</td></tr>'}</tbody></table></div>
+   <div class="pager">
+     <button data-act="hist-first" data-k="${k}" ${st.page<=1?'disabled':''}>首页</button>
+     <button data-act="hist-prev" data-k="${k}" ${st.page<=1?'disabled':''}>上一页</button>
+     <span>第 ${st.page} / ${pages} 页 · 共 ${rows.length.toLocaleString()} 期${q?'（已筛选）':''}</span>
+     <button data-act="hist-next" data-k="${k}" ${st.page>=pages?'disabled':''}>下一页</button>
+     <button data-act="hist-last" data-k="${k}" ${st.page>=pages?'disabled':''}>末页</button>
+     <input data-act="hist-search" data-k="${k}" placeholder="搜索期号 / 日期" value="${esc(st.q||'')}">
+   </div>`;
+}
+function historySection(a,k){
+  return `<section class="box"><h2><span class="section-no">4</span>历史号码</h2>
+   <p class="hint">全部 ${a.count.toLocaleString()} 期开奖记录，按期号倒序，可翻页或按期号 / 日期搜索。</p>
+   <div id="hist-${k}">${historyTable(k)}</div>
+   <div class="note">历史号码来自公开开奖公告，采集与双源校验口径见下方「数据说明」。</div></section>`;
+}
 function gamePanel(key){
   const g=G[key],a=g.analysis,zf=a.zones.front,zb=a.zones.back,s=a.structure;
-  const recs=Object.values(g.recommendations);
-  const recHtml=recs.map(r=>stratCard(r,key)).join('');
   const statCards=`
    <div class="kv"><span>覆盖期数 <b>${a.count.toLocaleString()}</b></span>
    <span>期号范围 <b>${esc(a.earliest.issue)} ~ ${esc(a.latest.issue)}</b></span>
@@ -256,11 +366,13 @@ function gamePanel(key){
     `<h3 class="sub-h">七星彩 · 各数位 0~9 出现次数（按位统计）</h3><table><tr><th>位置</th>${zf.numbers.map(n=>`<th>${n}</th>`).join('')}</tr>`+
     zf.by_position.map((row,i)=>`<tr><td>第 ${i+1} 位</td>${row.map(v=>`<td class="num">${v}</td>`).join('')}</tr>`).join('')+`</table>`:'';
   return `<div class="panel ${key==='ssq'?'on':''}" id="p-${key}">
-   <section class="box"><h2>${esc(a.name)} <span style="font-size:12px;color:var(--ink3);font-weight:400">${esc(a.org)}</span></h2>
-    <p class="hint">选号规则：${esc(a.rules)}</p>
+   ${topPickSection(a,key)}
+   ${recommendSection(a,key)}
+   ${recentSection(a,key)}
+   ${historySection(a,key)}
+   <section class="box"><h2>数据说明 · ${esc(a.name)} <span style="font-size:12px;color:var(--ink3);font-weight:400">${esc(a.org)}</span></h2>
+    <p class="hint">选号规则：${esc(a.rules)}　·　${esc(a.draw_days)}开奖　·　单注 ¥${a.price}</p>
     ${statCards}
-    <h3 class="sub-h">最新开奖 · 第 ${esc(a.latest.issue)} 期 ${a.latest.date?'（'+esc(a.latest.date)+'）':''}</h3>
-    ${balls(a.latest.front,a.latest.back,key)}
     <div class="note"><b>数据源</b>　${esc(a.source_desc)}
       ${a.data_notes?'<br><b>数据口径提示</b>　'+esc(a.data_notes):''}</div>
    </section>
@@ -306,13 +418,6 @@ function gamePanel(key){
       s.third_ratio_top.map(x=>`<tr><td>${esc(x.ratio)}</td><td class="num">${x.count}</td></tr>`).join('')+`</table>`:''}
    </section>
    ${backtestSection(g.backtest)}
-   <section class="box"><h2>参考组合（娱乐演示，非购买建议）</h2>
-    <p class="hint">四组策略使用同一随机种子，便于对比；所有组合的单注中奖概率均为 ${esc(g.recommendations.balanced.jackpot_odds)}，完全相同。</p>
-    <div class="strat-grid">${recHtml}</div>
-    <div class="note strong"><b>请理性看待</b>　${esc(g.recommendations.balanced.notice)}
-      报告中的「参考组合」是统计分析结果的可视化演示，<b>不是、也不应被当作购买建议</b>。
-      如需购彩，请自行决定并自行承担风险；不购彩当然也完全可以。</div>
-   </section>
    <section class="box"><h2>关于「买什么」的认真回答</h2>
     <p class="hint">这是本工具唯一会给出的购买建议，它不基于任何号码预测。</p>
     <table><tr><th style="width:150px">问题</th><th>基于数据的回答</th></tr>
@@ -325,30 +430,136 @@ function gamePanel(key){
    </section>
   </div>`;
 }
-// 渲染
-const order=['ssq','dlt','qxc'];
-document.getElementById('cards').innerHTML=order.map(k=>{const a=G[k].analysis,b=G[k].backtest;
-  return `<div class="card"><div class="k">${esc(a.name)} · 已采集</div><div class="v">${a.count.toLocaleString()} <span style="font-size:14px;font-weight:400">期</span></div>
-   <div class="d">最新第 ${esc(a.latest.issue)} 期 · 回测 ${b.rounds} 期</div></div>`}).join('')+
-  `<div class="card"><div class="k">回测结论</div><div class="v" style="font-size:18px;color:var(--green)">统计选号 ≈ 纯随机</div>
-   <div class="d">历史冷热号未带来显著命中优势</div></div>`;
-document.getElementById('tabs').innerHTML=order.map((k,i)=>
-  `<button class="tab ${i===0?'on':''}" data-k="${k}">${esc(G[k].analysis.name)}</button>`).join('');
-document.getElementById('panels').innerHTML=order.map(k=>gamePanel(k)).join('');
-document.querySelectorAll('.tab').forEach(btn=>btn.addEventListener('click',()=>{
-  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('on'));
-  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('on'));
-  btn.classList.add('on');
-  document.getElementById('p-'+btn.dataset.k).classList.add('on');
-  window.scrollTo({top:document.querySelector('.tabs').offsetTop-16,behavior:'smooth'});
-}));
+// ---------------------------------------------------------------- 渲染
+const ORDER=['ssq','dlt','qxc'];
+let activeGame='ssq';
+function renderAll(){
+  document.getElementById('top-picks').innerHTML=topPicksSection();
+  document.getElementById('cards').innerHTML=ORDER.map(k=>{const a=G[k].analysis,b=G[k].backtest;
+    return `<div class="card"><div class="k">${esc(a.name)} · 已采集</div><div class="v">${a.count.toLocaleString()} <span style="font-size:14px;font-weight:400">期</span></div>
+     <div class="d">最新第 ${esc(a.latest.issue)} 期 · 回测 ${b.rounds} 期</div></div>`}).join('')+
+    `<div class="card"><div class="k">回测结论</div><div class="v" style="font-size:18px;color:var(--green)">统计选号 ≈ 纯随机</div>
+     <div class="d">历史冷热号未带来显著命中优势</div></div>`;
+  document.getElementById('tabs').innerHTML=ORDER.map(k=>
+    `<button class="tab ${k===activeGame?'on':''}" data-act="tab" data-k="${k}">${esc(G[k].analysis.name)}</button>`).join('');
+  document.getElementById('panels').innerHTML=ORDER.map(k=>gamePanel(k)).join('');
+  Object.keys(histState).forEach(k=>delete histState[k]);
+  const gt=document.getElementById('gen-time');
+  if(gt)gt.textContent=D.meta.generated_at||'';
+}
+function switchTab(k){
+  activeGame=k;
+  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.k===k));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('on',p.id==='p-'+k));
+  const t=document.querySelector('.tabs');
+  if(t&&window.scrollTo)window.scrollTo({top:t.offsetTop-16,behavior:'smooth'});
+}
+// ---------------------------------------------------------------- 更新数据
+const UPDATE_API=(function(){
+  if(typeof location==='undefined')return 'http://127.0.0.1:8765/api/update';
+  const o=location.origin||'';
+  if(o&&/:8765$/.test(o))return '/api/update';
+  if(o&&/^https?:/.test(o))return o.replace(/:\d+$/,':8765')+'/api/update';
+  return 'http://127.0.0.1:8765/api/update';
+})();
+async function doUpdate(){
+  const btn=document.getElementById('update-btn'),st=document.getElementById('update-status');
+  if(!btn||!st)return;
+  btn.disabled=true;btn.textContent='更新中…';st.textContent='正在从官方公开接口增量采集开奖数据并重算分析，请稍候…';
+  try{
+    const res=await fetch(UPDATE_API,{method:'POST'});
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    const out=await res.json();
+    if(!out.ok)throw new Error(out.error||'服务端返回失败');
+    D=out.data;G=D.games;
+    renderAll();
+    st.textContent='更新完成：'+(out.message||'数据已刷新')+' · 生成于 '+(D.meta.generated_at||'');
+  }catch(err){
+    st.innerHTML='更新失败：'+esc(err.message||err)+'。请先在项目目录运行 <code>python pickwise.py serve</code>，'
+      +'再访问 <code>http://127.0.0.1:8765/</code> 打开报告后点击本按钮；直接双击 HTML 文件时无法调用本地采集程序。';
+  }finally{btn.disabled=false;btn.textContent='更新数据';}
+}
+// ---------------------------------------------------------------- 事件（委托，重渲染后依然有效）
+document.addEventListener('click',e=>{
+  const t=e.target&&e.target.closest?e.target.closest('[data-act]'):null;
+  if(!t)return;
+  const act=t.dataset.act,k=t.dataset.k;
+  if(act==='update'){doUpdate();return;}
+  if(act==='tab'){switchTab(k);return;}
+  if(act&&act.indexOf('hist-')===0){
+    const st=histState[k]||(histState[k]={page:1,q:''});
+    if(act==='hist-first')st.page=1;
+    if(act==='hist-prev')st.page=st.page-1;
+    if(act==='hist-next')st.page=st.page+1;
+    if(act==='hist-last')st.page=999999;
+    const box=document.getElementById('hist-'+k);
+    if(box)box.innerHTML=historyTable(k);
+  }
+});
+document.addEventListener('input',e=>{
+  const t=e.target;
+  if(!t||!t.dataset||t.dataset.act!=='hist-search')return;
+  const k=t.dataset.k;
+  const st=histState[k]||(histState[k]={page:1,q:''});
+  st.q=t.value;st.page=1;
+  const box=document.getElementById('hist-'+k);
+  if(box)box.innerHTML=historyTable(k);
+  const again=document.querySelector('[data-act="hist-search"][data-k="'+k+'"]');
+  if(again&&again.focus){again.focus();if(again.setSelectionRange)again.setSelectionRange(t.value.length,t.value.length);}
+});
+renderAll();
 </script>
 </body></html>
 """
 
 
+def extract_top_pick(game, recommendations):
+    """汇总所有策略的全部参考组合，提取出现频率最高的号码组成一组。
+
+    组合型选号区：按「被多少组选中」排序取前 size 个；
+    排列型选号区：每个数位独立取该位出现次数最多的数字（并列取较小值）。
+    这只是对推荐结果的再统计（元统计），不含任何预测能力。
+    """
+    combos = [c for r in recommendations.values() for c in r["combos"]]
+    if not combos:
+        raise ValueError("没有可用的参考组合，无法提取最推荐号码")
+    total = len(combos)
+
+    def by_frequency(zone, field):
+        counter = Counter(v for c in combos for v in c[field])
+        ranked = sorted(zone.numbers, key=lambda n: (-counter[n], n))
+        chosen = sorted(ranked[:zone.size])
+        support = [{"number": n, "count": counter[n], "rate": round(counter[n] / total, 3)}
+                   for n in chosen]
+        return chosen, support
+
+    def by_position(zone, field):
+        chosen, support = [], []
+        for pos in range(zone.size):
+            counter = Counter(c[field][pos] for c in combos)
+            num = max(zone.numbers, key=lambda n: (counter[n], -n))
+            chosen.append(num)
+            support.append({"number": num, "count": counter[num],
+                            "rate": round(counter[num] / total, 3), "position": pos + 1})
+        return chosen, support
+
+    ff, fs = (by_frequency(game.front, "front") if game.front.combination
+              else by_position(game.front, "front"))
+    fb, bs = (by_frequency(game.back, "back") if game.back.combination
+              else by_position(game.back, "back"))
+    return {
+        "front": ff,
+        "back": fb,
+        "front_support": fs,
+        "back_support": bs,
+        "total_combos": total,
+        "strategy_count": len(recommendations),
+        "note": "由全部策略的参考组合按出现频率汇总而成，仅为元统计演示，不提高中奖概率。",
+    }
+
+
 def build_data(keys=None, rec_count=3, rounds=200, window=250, seed=20261105):
-    from .analyze import analyze_all
+    from .analyze import analyze_all, load_draws
     from .backtest import backtest_all as _bt
     from .config import GAME_ORDER
     keys = keys or list(GAME_ORDER)
@@ -359,16 +570,36 @@ def build_data(keys=None, rec_count=3, rounds=200, window=250, seed=20261105):
         part = recommend_all(keys, strategy=st, count=rec_count, seed=seed)
         for k in keys:
             recs.setdefault(k, {})[st] = part[k]
+
+    games = {}
+    for k in keys:
+        game = game_of(k)
+        newest_first = list(reversed(load_draws(k)))
+        # 紧凑存储全量历史：[期号, 日期, 前区字符串, 后区字符串]，按期号倒序
+        history = [
+            [d["issue"], d["date"],
+             " ".join(f"{x:02d}" for x in d["front"]),
+             " ".join(f"{x:02d}" for x in d["back"])]
+            for d in newest_first
+        ]
+        recent = [{"issue": d["issue"], "date": d["date"],
+                   "front": d["front"], "back": d["back"]}
+                  for d in newest_first[:10]]
+        games[k] = {
+            "analysis": analyses[k],
+            "recommendations": recs[k],
+            "backtest": backtests[k],
+            "top_pick": extract_top_pick(game, recs[k]),
+            "recent": recent,
+            "history": history,
+        }
     return {
         "meta": {
             "version": __version__,
             "generated_at": dt.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S"),
             "disclaimer": DISCLAIMER,
         },
-        "games": {
-            k: {"analysis": analyses[k], "recommendations": recs[k], "backtest": backtests[k]}
-            for k in keys
-        },
+        "games": games,
     }
 
 

@@ -105,6 +105,14 @@ def cmd_report(args):
     return 0
 
 
+def cmd_serve(args):
+    from .serve import serve
+    serve(host=args.host, port=args.port,
+          options={"rec_count": args.count, "rounds": args.rounds,
+                   "window": args.window, "seed": args.seed})
+    return 0
+
+
 def cmd_all(args):
     from .config import GAME_ORDER, parse_game_keys
     from .fetch import fetch_all
@@ -163,6 +171,15 @@ def build_parser():
     rp.add_argument("--window", type=int, default=250)
     rp.add_argument("--seed", type=int, default=20261105)
     rp.set_defaults(func=cmd_report)
+
+    sv = sub.add_parser("serve", help="启动本地服务，让报告右上角「更新数据」按钮可用")
+    sv.add_argument("--host", default="127.0.0.1")
+    sv.add_argument("--port", type=int, default=8765)
+    sv.add_argument("--count", type=int, default=3)
+    sv.add_argument("--rounds", type=int, default=200)
+    sv.add_argument("--window", type=int, default=250)
+    sv.add_argument("--seed", type=int, default=20261105)
+    sv.set_defaults(func=cmd_serve)
 
     al = sub.add_parser("all", help="一键：采集数据 + 生成报告")
     add_games(al)

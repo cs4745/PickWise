@@ -1,6 +1,6 @@
 {
-  "fetched_at": "2026-11-05T15:19:03+08:00",
-  "mode": "full",
+  "fetched_at": "2026-11-05T15:42:40+08:00",
+  "mode": "incremental",
   "games": {
     "ssq": {
       "game": "ssq",
@@ -39,8 +39,8 @@
         ],
         "source": "500彩票网"
       },
-      "mode": "full",
-      "stop_reason": "complete",
+      "mode": "incremental",
+      "stop_reason": "incremental_stop",
       "validation_errors": 0,
       "validation_warnings": 1439,
       "warning_sample": [
@@ -96,8 +96,8 @@
         ],
         "source": "中国体育彩票"
       },
-      "mode": "full",
-      "stop_reason": "complete",
+      "mode": "incremental",
+      "stop_reason": "incremental_stop",
       "validation_errors": 0,
       "validation_warnings": 0,
       "warning_sample": [],
@@ -149,8 +149,8 @@
         ],
         "source": "中国体育彩票"
       },
-      "mode": "full",
-      "stop_reason": "complete",
+      "mode": "incremental",
+      "stop_reason": "incremental_stop",
       "validation_errors": 0,
       "validation_warnings": 0,
       "warning_sample": [],

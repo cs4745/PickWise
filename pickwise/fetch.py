@@ -386,6 +386,17 @@ def fetch_all(keys, full: bool = True, verbose: bool = True):
     for key in keys:
         report["games"][key] = fetch_game(key, full=full, verbose=verbose)
     path = DATA_DIR / "validation.json"
+    if not full and path.exists():
+        # 增量模式不重新跑双源交叉校验，保留上一次的校验结果与来源记录
+        try:
+            old = json.loads(path.read_text(encoding="utf-8"))
+            for key, info in report["games"].items():
+                prev = old.get("games", {}).get(key, {})
+                for field in ("cross_check", "source_rows"):
+                    if field not in info and field in prev:
+                        info[field] = prev[field]
+        except (ValueError, OSError):
+            pass
     path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     if verbose:
         print(f"  数据校验报告: {path}")
