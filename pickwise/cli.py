@@ -97,7 +97,8 @@ def cmd_backtest(args):
 def cmd_report(args):
     from .report import build_data, generate
     print("生成分析报告（含回测，可能需要十几秒）...")
-    data = build_data(rec_count=args.count, rounds=args.rounds, window=args.window, seed=args.seed)
+    data = build_data(rec_count=args.count, rounds=args.rounds, window=args.window,
+                      seed=args.seed, groups=args.groups, expand=args.expand)
     path, _ = generate(data)
     print(f"报告已生成：{path}")
     print(f"结构化数据：{path.parent / 'analysis.json'}")
@@ -105,11 +106,49 @@ def cmd_report(args):
     return 0
 
 
+def cmd_strategy(args):
+    from .config import parse_game_keys
+    from .strategy import NEWS, news_inference, news_strategy
+    keys = parse_game_keys(args.games)
+    f = news_inference()
+    print("\n【新闻还原】" + NEWS["title"])
+    print(f"  来源：{NEWS['source']}｜玩法：{NEWS['game']}")
+    for c in f["checks"]:
+        print("  · " + c)
+    for i, layer in enumerate(f["layers"], 1):
+        print(f"  第{i}层：{layer}")
+    print("  " + f["honest_note"])
+    print("  官方提醒：" + NEWS["official_warning"])
+
+    _print_disclaimer()
+    for k in keys:
+        s = news_strategy(k, groups=args.groups, expand=args.expand,
+                          window=args.window, seed=args.seed)
+        print(f"\n【{s['name']}】借鉴该模式的单式 / 复式演示")
+        for i, layer in enumerate(s["layers"], 1):
+            print(f"  第{i}层：{layer}")
+        print(f"  候选池 前区 {s['pool']['front']} 后区 {s['pool']['back']}")
+        print(f"  单式 {len(s['singles'])} 组：")
+        for c in s["singles"]:
+            st = c["structure"]
+            print(f"    第{c['index']}组  {c['front_text']}  +  {c['back_text']}"
+                  f"   [和值 {st['sum']} / 重号 {st['repeat']} / 连号 {st['consecutive']}]")
+        m = s["multiple"]
+        print(f"  复式：{m['front_text']}  +  {m['back_text']}")
+        print(f"    {m['formula']}，共 {m['bets']} 注 × ¥{s['price']} = ¥{m['cost']}，一等奖概率 {m['odds']}")
+        print("  成本对照：" + "；".join(
+            f"{c['label']} ¥{c['cost']}(概率×{c['multiple']})" for c in s["cost_table"]))
+        print(f"  提醒：{s['notice']}")
+    print("\n以上为统计演示，不构成购买建议；不购彩是零成本且期望最优的选择。")
+    return 0
+
+
 def cmd_serve(args):
     from .serve import serve
     serve(host=args.host, port=args.port,
           options={"rec_count": args.count, "rounds": args.rounds,
-                   "window": args.window, "seed": args.seed})
+                   "window": args.window, "seed": args.seed,
+                   "groups": args.groups, "expand": args.expand})
     return 0
 
 
@@ -122,7 +161,8 @@ def cmd_all(args):
     fetch_all(keys, full=not args.incremental)
     print("2/2 分析并生成报告...")
     data = build_data(keys=keys, rec_count=args.count, rounds=args.rounds,
-                      window=args.window, seed=args.seed)
+                      window=args.window, seed=args.seed,
+                      groups=args.groups, expand=args.expand)
     path, _ = generate(data)
     print(f"完成：{path}")
     _print_disclaimer()
@@ -139,6 +179,11 @@ def build_parser():
 
     def add_games(sp):
         sp.add_argument("--games", default="all", help="彩种：all / ssq / dlt / qxc，逗号分隔（默认 all）")
+
+    def add_strategy_flags(sp):
+        sp.add_argument("--groups", type=int, default=6, help="单式组数，对应新闻里的 6 组（默认 6）")
+        sp.add_argument("--expand", type=int, default=2,
+                        help="复式扩展量：组合型为前区多选几个号，排列型为双选的数位数（默认 2）")
 
     f = sub.add_parser("fetch", help="采集历史开奖数据")
     add_games(f)
@@ -165,8 +210,16 @@ def build_parser():
     b.add_argument("--seed", type=int, default=20261105)
     b.set_defaults(func=cmd_backtest)
 
+    st = sub.add_parser("strategy", help="借鉴新闻模式，输出单式 / 复式推荐与成本对照")
+    add_games(st)
+    add_strategy_flags(st)
+    st.add_argument("--window", type=int, default=100, help="近期统计窗口（默认 100 期）")
+    st.add_argument("--seed", type=int, default=20261105)
+    st.set_defaults(func=cmd_strategy)
+
     rp = sub.add_parser("report", help="生成自包含 HTML 分析报告")
     rp.add_argument("--count", type=int, default=3, help="每种策略生成几组（默认 3）")
+    add_strategy_flags(rp)
     rp.add_argument("--rounds", type=int, default=200)
     rp.add_argument("--window", type=int, default=250)
     rp.add_argument("--seed", type=int, default=20261105)
@@ -176,6 +229,7 @@ def build_parser():
     sv.add_argument("--host", default="127.0.0.1")
     sv.add_argument("--port", type=int, default=8765)
     sv.add_argument("--count", type=int, default=3)
+    add_strategy_flags(sv)
     sv.add_argument("--rounds", type=int, default=200)
     sv.add_argument("--window", type=int, default=250)
     sv.add_argument("--seed", type=int, default=20261105)
@@ -185,6 +239,7 @@ def build_parser():
     add_games(al)
     al.add_argument("--incremental", action="store_true")
     al.add_argument("--count", type=int, default=3)
+    add_strategy_flags(al)
     al.add_argument("--rounds", type=int, default=200)
     al.add_argument("--window", type=int, default=250)
     al.add_argument("--seed", type=int, default=20261105)

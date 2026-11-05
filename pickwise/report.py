@@ -10,6 +10,7 @@ from . import DISCLAIMER, __version__
 from .backtest import DEFAULT_STRATEGIES, backtest_all
 from .config import OUTPUT_DIR, game_of
 from .recommend import STRATEGIES, recommend_all
+from .strategy import NEWS, news_inference, news_strategy_all
 
 TEMPLATE = r"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -122,6 +123,17 @@ svg text{font-family:inherit}
 .recent-table td:first-child{white-space:nowrap}
 .section-no{display:inline-block;width:22px;height:22px;line-height:22px;text-align:center;
   background:var(--primary-soft);color:var(--primary);border-radius:6px;font-size:12px;margin-right:8px}
+.news-box{border-left:4px solid #e8754b}
+.news-meta{font-size:12px;color:var(--ink3);margin-bottom:10px}
+.layer-flow{display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;margin:12px 0}
+.layer{flex:1 1 200px;background:#f7faff;border:1px solid #dfe8fa;border-radius:9px;padding:11px 13px;font-size:12.5px}
+.layer b{display:block;color:var(--primary);margin-bottom:4px;font-size:13px}
+.single-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#fafbff;
+  border:1px solid var(--line);border-radius:8px;padding:9px 12px;margin-bottom:7px}
+.single-row .idx{font-size:11px;color:var(--ink3);min-width:44px}
+.single-row .struct{font-size:11px;color:var(--ink3);margin-left:auto}
+.multi-box{background:#fff8f2;border:1px solid #f4d8bf;border-radius:9px;padding:14px 16px;margin-top:10px}
+.multi-box .cost{font-size:13px;color:#a4531c;font-weight:600;margin-top:8px}
 </style>
 </head>
 <body>
@@ -137,6 +149,7 @@ svg text{font-family:inherit}
   本报告展示的「参考组合」只是历史统计加权的随机抽样结果，<b>不是预测，也不构成购买建议</b>；
   其单注中奖概率与任意一组手写号码完全相同。</div>
   <section class="box top-picks" id="top-picks"></section>
+  <section class="box news-box" id="news-digest"></section>
   <div class="cards" id="cards"></div>
   <div class="tabs" id="tabs"></div>
   <div id="panels"></div>
@@ -354,6 +367,68 @@ function historySection(a,k){
    <div id="hist-${k}">${historyTable(k)}</div>
    <div class="note">历史号码来自公开开奖公告，采集与双源校验口径见下方「数据说明」。</div></section>`;
 }
+// ---------------------------------------------------------------- 新闻模式：单式 / 复式
+function newsDigestSection(){
+  const n=D.news&&D.news.info,f=D.news&&D.news.inference;
+  if(!n||!f)return '';
+  return `<h2>新闻模式解读 · 他到底怎么买的</h2>
+   <div class="news-meta">${esc(n.title)}<br>来源：${esc(n.source)}　·　玩法：${esc(n.game)}
+    · <a href="${esc(n.url)}" target="_blank" rel="noopener">原文链接</a></div>
+   <table><tr><th style="width:100px">原文事实</th><td>${n.facts.map(x=>'<div>· '+esc(x)+'</div>').join('')}</td></tr>
+    <tr><th>结构验算</th><td>${f.checks.map(x=>'<div>· '+esc(x)+'</div>').join('')}</td></tr></table>
+   <h3 class="sub-h">还原出的三层模式</h3>
+   <div class="layer-flow">${f.layers.map((x,i)=>`<div class="layer"><b>第 ${i+1} 层</b>${esc(x)}</div>`).join('')}</div>
+   <div class="note"><b>本项目怎么借鉴</b>　${esc(f.honest_note)} 文章讲的是快乐 8「选十」，本项目不含该玩法；
+    下面把同样的三层结构迁移到双色球 / 大乐透 / 七星彩，形成单式与复式演示。</div>
+   <div class="note strong"><b>原文官方提醒</b>　${esc(n.official_warning)}<br>
+    另需注意：文中购彩者自述「手头有些债务压力」。在财务压力下试图靠购彩翻身风险极高，
+    不要把个例中奖当成可复制的方法，更不要因此增加投入。</div>`;
+}
+function newsStrategySection(a,key){
+  const s=G[key].news_strategy;
+  if(!s)return '';
+  const rows=Array.isArray(s.multiple.front[0]);
+  const multiBalls=rows
+    ? `<div class="grid2"><table><tr><th>数位</th><th>复式候选数字</th></tr>
+        ${s.multiple.front.map((r,i)=>`<tr><td>第 ${i+1} 位</td><td>${r.map(x=>`<span class="ball purple small">${x}</span>`).join('')}</td></tr>`).join('')}
+        <tr><td>特别位</td><td>${s.multiple.back.map(x=>`<span class="ball blue small">${String(x).padStart(2,'0')}</span>`).join('')}</td></tr></table>
+        <div class="note">七星彩是排列型玩法，「复式」表现为部分数位双选（定位复式），与组合型的 N 码复式不同。</div></div>`
+    : `<div class="single-row">${s.multiple.front.map(x=>`<span class="ball red">${String(x).padStart(2,'0')}</span>`).join('')}
+        <span style="color:#a7b4c9;font-weight:700">+</span>
+        ${s.multiple.back.map(x=>`<span class="ball blue">${String(x).padStart(2,'0')}</span>`).join('')}</div>`;
+  const singles=s.singles.map(x=>{
+    const st=x.structure;
+    const bits=['和值 '+st.sum];
+    if(st.odd!==null&&st.odd!==undefined)bits.push('奇数 '+st.odd);
+    bits.push('重号 '+st.repeat,'连号 '+st.consecutive);
+    if(st.third_ratio)bits.push('三区 '+st.third_ratio);
+    return `<div class="single-row"><span class="idx">第 ${x.index} 组</span>
+      ${balls(x.front,x.back,key,true)}<span class="struct">${esc(bits.join(' · '))}</span></div>`;
+  }).join('');
+  const costRows=s.cost_table.map(c=>`<tr><td>${esc(c.label)}</td><td class="num">${c.bets}</td>
+    <td class="num">¥${c.cost}</td><td class="num">×${c.multiple}</td>
+    <td class="num">${c.multiple} / ${esc(s.base_odds.split('/ ')[1]||'')}</td></tr>`).join('');
+  return `<section class="box"><h2>借鉴新闻模式 · 单式 / 复式推荐（${esc(a.name)}）</h2>
+   <p class="hint">把「缩池 → 按重号/连号/分布人工修正 → 复式打包」迁移到本彩种。仅为统计演示，不是购买建议。</p>
+   <div class="layer-flow">${s.layers.map((x,i)=>`<div class="layer"><b>第 ${i+1} 层</b>${esc(x)}</div>`).join('')}</div>
+   <h3 class="sub-h">候选池（第一层缩池结果）</h3>
+   <div class="note">${esc(s.pool.by_position?
+      '前六位每位候选：'+s.pool.front.map((r,i)=>`第${i+1}位[${r.join(',')}]`).join('  ')+' ；特别位候选 ['+s.pool.back[0].join(',')+']':
+      s.name+'前区 '+s.pool.front_all+' → '+s.pool.front.join(', ')+' ；后区 '+s.pool.back_all+' → '+s.pool.back.join(', '))}</div>
+   <h3 class="sub-h">单式 ${s.singles.length} 组（对应新闻里「自己又选了 6 组」）</h3>
+   ${singles}
+   <h3 class="sub-h">复式 1 组（对应新闻里「11 码选十复式」）</h3>
+   ${multiBalls}
+   <div class="multi-box"><b>${esc(s.multiple.coverage)}</b>　·　注数计算：${esc(s.multiple.formula)}
+     <div class="cost">合计 ${s.multiple.bets} 注 × ¥${s.price} = ¥${s.multiple.cost}；
+     一等奖概率 ${esc(s.multiple.odds)}（单注为 ${esc(s.base_odds)}）</div></div>
+   <h3 class="sub-h">成本与概率对照：复式并没有更划算</h3>
+   <table><tr><th>方式</th><th>注数</th><th>金额</th><th>概率 / 成本倍数</th><th>一等奖概率</th></tr>${costRows}</table>
+   <div class="note strong"><b>必须说清楚</b>　${esc(s.notice)}
+     每注期望回报相同，复式只是「一次买更多注」；新闻中的 132 元买 66 注，概率与成本都是单注的 66 倍，
+     并没有任何技巧优势。本区块所有号码均为统计演示，<b>不构成购买建议</b>。</div>
+  </section>`;
+}
 function gamePanel(key){
   const g=G[key],a=g.analysis,zf=a.zones.front,zb=a.zones.back,s=a.structure;
   const statCards=`
@@ -368,6 +443,7 @@ function gamePanel(key){
   return `<div class="panel ${key==='ssq'?'on':''}" id="p-${key}">
    ${topPickSection(a,key)}
    ${recommendSection(a,key)}
+   ${newsStrategySection(a,key)}
    ${recentSection(a,key)}
    ${historySection(a,key)}
    <section class="box"><h2>数据说明 · ${esc(a.name)} <span style="font-size:12px;color:var(--ink3);font-weight:400">${esc(a.org)}</span></h2>
@@ -435,6 +511,8 @@ const ORDER=['ssq','dlt','qxc'];
 let activeGame='ssq';
 function renderAll(){
   document.getElementById('top-picks').innerHTML=topPicksSection();
+  const nd=document.getElementById('news-digest');
+  if(nd)nd.innerHTML=newsDigestSection();
   document.getElementById('cards').innerHTML=ORDER.map(k=>{const a=G[k].analysis,b=G[k].backtest;
     return `<div class="card"><div class="k">${esc(a.name)} · 已采集</div><div class="v">${a.count.toLocaleString()} <span style="font-size:14px;font-weight:400">期</span></div>
      <div class="d">最新第 ${esc(a.latest.issue)} 期 · 回测 ${b.rounds} 期</div></div>`}).join('')+
@@ -558,7 +636,8 @@ def extract_top_pick(game, recommendations):
     }
 
 
-def build_data(keys=None, rec_count=3, rounds=200, window=250, seed=20261105):
+def build_data(keys=None, rec_count=3, rounds=200, window=250, seed=20261105,
+               groups=6, expand=2):
     from .analyze import analyze_all, load_draws
     from .backtest import backtest_all as _bt
     from .config import GAME_ORDER
@@ -571,6 +650,8 @@ def build_data(keys=None, rec_count=3, rounds=200, window=250, seed=20261105):
         for k in keys:
             recs.setdefault(k, {})[st] = part[k]
 
+    strategies = news_strategy_all(keys, groups=groups, expand=expand,
+                                   window=window, seed=seed)
     games = {}
     for k in keys:
         game = game_of(k)
@@ -592,6 +673,7 @@ def build_data(keys=None, rec_count=3, rounds=200, window=250, seed=20261105):
             "top_pick": extract_top_pick(game, recs[k]),
             "recent": recent,
             "history": history,
+            "news_strategy": strategies[k],
         }
     return {
         "meta": {
@@ -599,6 +681,7 @@ def build_data(keys=None, rec_count=3, rounds=200, window=250, seed=20261105):
             "generated_at": dt.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S"),
             "disclaimer": DISCLAIMER,
         },
+        "news": {"info": NEWS, "inference": news_inference()},
         "games": games,
     }
 

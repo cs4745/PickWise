@@ -16,6 +16,7 @@ from pickwise.config import DATA_DIR, GAMES, GAME_ORDER, game_of  # noqa: E402
 from pickwise.fetch import cross_check, issue_sort_key, validate_draws  # noqa: E402
 from pickwise.recommend import STRATEGIES, jackpot_odds, recommend  # noqa: E402
 from pickwise.report import extract_top_pick  # noqa: E402
+from pickwise.strategy import NEWS, news_inference, news_strategy  # noqa: E402
 
 HAS_DATA = all((DATA_DIR / f"{k}.csv").exists() for k in GAME_ORDER)
 
@@ -83,6 +84,47 @@ class TestCounters(unittest.TestCase):
         om = omission_stats(draws, "front", g)
         self.assertEqual(om[6]["current"], 1)
         self.assertEqual(om[1]["current"], 0)
+
+
+class TestNewsStrategy(unittest.TestCase):
+    def test_news_inference_is_self_consistent(self):
+        f = news_inference()
+        self.assertEqual(f["bets_per_ticket"], 11)
+        self.assertEqual(f["total_bets"], 66)
+        self.assertEqual(f["total_cost"], 132)
+        self.assertEqual(f["pool_ratio"], 0.25)
+        self.assertEqual(len(f["layers"]), 3)
+        self.assertIn("不能提升中奖概率", NEWS["official_warning"])
+
+    def test_strategy_output_is_valid(self):
+        import math
+        for k in GAME_ORDER:
+            g = game_of(k)
+            s = news_strategy(k, groups=6, expand=2, seed=7)
+            self.assertEqual(len(s["singles"]), 6)
+            self.assertGreater(s["multiple"]["bets"], 1)
+            self.assertEqual(s["multiple"]["cost"], s["multiple"]["bets"] * g.price)
+            for c in s["singles"]:
+                self.assertEqual(len(c["front"]), g.front.size)
+                self.assertEqual(len(c["back"]), g.back.size)
+                self.assertTrue(all(g.front.low <= x <= g.front.high for x in c["front"]))
+                if g.front.combination:
+                    self.assertEqual(c["front"], sorted(c["front"]))
+                    self.assertEqual(len(set(c["front"])), g.front.size)
+            m = s["multiple"]
+            if g.front.combination:
+                self.assertEqual(m["front"], sorted(m["front"]))
+                self.assertEqual(m["bets"], math.comb(len(m["front"]), g.front.size)
+                                 * math.comb(len(m["back"]), g.back.size))
+            else:
+                self.assertEqual(m["bets"], 4)  # 2 个数位各双选
+            self.assertEqual(len(s["cost_table"]), 3)
+
+    def test_reproducible(self):
+        a = news_strategy("ssq", seed=99)
+        b = news_strategy("ssq", seed=99)
+        self.assertEqual([x["front"] for x in a["singles"]],
+                         [x["front"] for x in b["singles"]])
 
 
 class TestTopPick(unittest.TestCase):
@@ -168,6 +210,9 @@ class TestWithRealData(unittest.TestCase):
         self.assertEqual(len(g["top_pick"]["back"]), 1)
         self.assertEqual(g["top_pick"]["total_combos"], 8)  # 4 策略 × 2 组
         self.assertTrue(g["history"][0][0] >= g["history"][-1][0])
+        self.assertIn("news", data)
+        self.assertEqual(data["news"]["inference"]["total_cost"], 132)
+        self.assertEqual(len(g["news_strategy"]["singles"]), 6)
 
     def test_report_generation(self):
         from pickwise.report import generate
