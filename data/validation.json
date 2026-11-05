@@ -1,0 +1,165 @@
+{
+  "fetched_at": "2026-11-05T15:19:03+08:00",
+  "mode": "full",
+  "games": {
+    "ssq": {
+      "game": "ssq",
+      "name": "双色球",
+      "count": 3523,
+      "new_rows": 0,
+      "latest": {
+        "issue": "2026126",
+        "date": "2026-11-03",
+        "front": [
+          9,
+          10,
+          13,
+          22,
+          29,
+          32
+        ],
+        "back": [
+          12
+        ],
+        "source": "中国福彩网"
+      },
+      "earliest": {
+        "issue": "2003001",
+        "date": "",
+        "front": [
+          10,
+          11,
+          12,
+          13,
+          26,
+          28
+        ],
+        "back": [
+          11
+        ],
+        "source": "500彩票网"
+      },
+      "mode": "full",
+      "stop_reason": "complete",
+      "validation_errors": 0,
+      "validation_warnings": 1439,
+      "warning_sample": [
+        "2012154: 缺少开奖日期（数据源未提供）",
+        "2012153: 缺少开奖日期（数据源未提供）",
+        "2012152: 缺少开奖日期（数据源未提供）"
+      ],
+      "sha256": "91c7d22afe608bec21221f651bdf1bd3de186d18b2084fc2041e12ab735d6aec",
+      "cross_check": {
+        "checked": 2084,
+        "conflicts": [],
+        "conflict_count": 0
+      },
+      "source_rows": {
+        "中国福彩网": 2084,
+        "500彩票网": 1439
+      }
+    },
+    "dlt": {
+      "game": "dlt",
+      "name": "超级大乐透",
+      "count": 2944,
+      "new_rows": 0,
+      "latest": {
+        "issue": "26126",
+        "date": "2026-11-04",
+        "front": [
+          5,
+          11,
+          17,
+          25,
+          34
+        ],
+        "back": [
+          4,
+          6
+        ],
+        "source": "中国体育彩票"
+      },
+      "earliest": {
+        "issue": "07001",
+        "date": "2007-05-30",
+        "front": [
+          22,
+          24,
+          29,
+          31,
+          35
+        ],
+        "back": [
+          4,
+          11
+        ],
+        "source": "中国体育彩票"
+      },
+      "mode": "full",
+      "stop_reason": "complete",
+      "validation_errors": 0,
+      "validation_warnings": 0,
+      "warning_sample": [],
+      "sha256": "bb51a077504f5aba8a495fc2722842802ee2b3a46f924a7009f0b77c22610255",
+      "cross_check": {
+        "checked": 2944,
+        "conflicts": [],
+        "conflict_count": 0
+      },
+      "source_rows": {
+        "中国体育彩票": 2944,
+        "500彩票网(仅校验)": 2944
+      }
+    },
+    "qxc": {
+      "game": "qxc",
+      "name": "七星彩",
+      "count": 3410,
+      "new_rows": 0,
+      "latest": {
+        "issue": "26126",
+        "date": "2026-11-03",
+        "front": [
+          3,
+          3,
+          3,
+          4,
+          1,
+          7
+        ],
+        "back": [
+          8
+        ],
+        "source": "中国体育彩票"
+      },
+      "earliest": {
+        "issue": "04101",
+        "date": "2004-05-21",
+        "front": [
+          8,
+          5,
+          5,
+          8,
+          5,
+          1
+        ],
+        "back": [
+          1
+        ],
+        "source": "中国体育彩票"
+      },
+      "mode": "full",
+      "stop_reason": "complete",
+      "validation_errors": 0,
+      "validation_warnings": 0,
+      "warning_sample": [],
+      "sha256": "4dc0cb9849e0a77b61c850b0ddf96c8b125f8326f857ebe17b36b3b4be1c048f"
+    }
+  },
+  "sources": {
+    "ssq": "中国福彩网开奖公告（2013 年至今，含开奖日期）+ 500 彩票网历史数据（2003 年首期起，补齐早期，二者重叠期号逐期交叉校验）",
+    "dlt": "中国体育彩票 webapi 历史开奖列表（全量，含开奖日期）+ 500 彩票网历史数据（全量，逐期交叉校验）",
+    "qxc": "中国体育彩票 webapi 历史开奖列表（全量，含开奖日期）"
+  }
+}
