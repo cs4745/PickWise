@@ -357,6 +357,12 @@ class TestWithRealData(unittest.TestCase):
         self.assertEqual(data["news"]["inference"]["total_cost"], 132)
         self.assertEqual(len(g["news_strategy"]["singles"]), 6)
 
+    def test_top_pick_cards_show_draw_date_and_freshness(self):
+        from pickwise.report import TEMPLATE
+        self.assertIn("function freshness(", TEMPLATE)
+        self.assertIn("a.latest.date", TEMPLATE)
+        self.assertIn("D.meta.generated_at", TEMPLATE)
+
     def test_report_generation(self):
         from pickwise.report import generate
         with tempfile.TemporaryDirectory() as td, patch("pickwise.report.OUTPUT_DIR", Path(td)):

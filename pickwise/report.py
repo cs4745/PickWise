@@ -297,13 +297,22 @@ function supportList(tp,limit){
   return `<div class="support">${[...tp.front_support,...tp.back_support].slice(0,limit||99)
     .map(x=>`<span>${String(x.number).padStart(2,'0')} 被 ${x.count}/${tp.total_combos} 组选中</span>`).join('')}</div>`;
 }
+function freshness(dateStr){
+  if(!dateStr)return '<span class="tag warn">开奖日期未知</span>';
+  const d=new Date(dateStr+'T00:00:00');
+  if(isNaN(d.getTime()))return '';
+  const days=Math.max(0,Math.floor((Date.now()-d.getTime())/86400000));
+  const label=days===0?'今天开奖':(days===1?'昨天开奖':days+' 天前开奖');
+  const cls=days<=2?'ok':(days<=7?'warn':'hot');
+  return `<span class="tag ${cls}" title="按你打开本页的时间计算">${label}</span>`;
+}
 function topPicksSection(){
   const order=ORDER;
   return `<h2><span class="section-no">1</span>最推荐号码</h2>
-   <p class="hint">把全部策略的参考组合汇总，提取出现频率最高的数字，按彩种各组成一组。这是对「建议」本身的再统计（元统计），不是预测。</p>
+   <p class="hint">把全部策略的参考组合汇总，提取出现频率最高的数字，按彩种各组成一组。这是对「建议」本身的再统计（元统计），不是预测。数据生成于 ${esc(D.meta.generated_at||'—')}。</p>
    <div class="pick-grid">${order.map(k=>{const tp=G[k].top_pick,a=G[k].analysis;
      return `<div class="pick-card"><h3>${esc(a.name)}</h3>
-      <div class="meta">${tp.strategy_count} 种策略 · ${tp.total_combos} 组建议 · 最新第 ${esc(a.latest.issue)} 期</div>
+      <div class="meta">${tp.strategy_count} 种策略 · ${tp.total_combos} 组建议 · 最新第 ${esc(a.latest.issue)} 期 · ${esc(a.latest.date||'日期未知')} ${freshness(a.latest.date)}</div>
       ${topPickBalls(tp,k)}${supportList(tp,7)}</div>`}).join('')}</div>
    <div class="note">频率高只说明「这些策略恰好都倾向这些数字」。<b>每期开奖独立</b>，
    这组号码与任意一组手写号码的中奖概率完全相同；回测也显示统计选号并不优于纯随机。</div>`;
