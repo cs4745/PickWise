@@ -208,6 +208,32 @@ class TestServe(unittest.TestCase):
         b = build_parser().parse_args(["serve", "--host", "127.0.0.1", "--port", "9000"])
         self.assertEqual((b.host, b.port), ("127.0.0.1", 9000))
 
+    def test_cli_no_fetch_flag(self):
+        from pickwise.cli import build_parser
+        self.assertFalse(build_parser().parse_args(["serve"]).no_fetch)
+        b = build_parser().parse_args(["serve", "--no-fetch", "--port", "8801"])
+        self.assertTrue(b.no_fetch)
+        self.assertEqual(b.port, 8801)
+
+    def test_run_update_skip_fetch_never_calls_network(self):
+        from unittest.mock import patch
+        import pickwise.serve as s
+        from pickwise.config import GAME_ORDER
+        fake = {"games": {k: {"analysis": {"name": k, "latest": {"issue": "x"}}}
+                          for k in GAME_ORDER}, "meta": {}}
+        opts = {"skip_fetch": True, "rec_count": 1, "rounds": 1,
+                "window": 50, "seed": 1}
+        with patch.object(s, "_DEFAULTS", opts), \
+                patch("pickwise.fetch.fetch_all") as mf, \
+                patch("pickwise.report.build_data", return_value=fake) as mb, \
+                patch("pickwise.report.generate") as mg:
+            _, msg = s.run_update()
+        self.assertFalse(mf.called)
+        self.assertTrue(mb.called)
+        self.assertTrue(mg.called)
+        self.assertIn("未采集", msg)
+        self.assertIn("--no-fetch", msg)
+
     def test_friendly_error_explains_http_403(self):
         from pickwise.serve import friendly_error
         msg = friendly_error(RuntimeError(

@@ -148,7 +148,8 @@ def cmd_serve(args):
     serve(host=args.host, port=args.port,
           options={"rec_count": args.count, "rounds": args.rounds,
                    "window": args.window, "seed": args.seed,
-                   "groups": args.groups, "expand": args.expand})
+                   "groups": args.groups, "expand": args.expand,
+                   "skip_fetch": args.no_fetch})
     return 0
 
 
@@ -233,6 +234,8 @@ def build_parser():
     sv.add_argument("--rounds", type=int, default=200)
     sv.add_argument("--window", type=int, default=250)
     sv.add_argument("--seed", type=int, default=20261105)
+    sv.add_argument("--no-fetch", action="store_true",
+                    help="不联网采集，只用现有 data/*.csv 重算报告（适用于开奖数据源被拦截的服务器）")
     sv.set_defaults(func=cmd_serve)
 
     al = sub.add_parser("all", help="一键：采集数据 + 生成报告")

@@ -32,7 +32,8 @@ def friendly_error(exc: Exception) -> str:
                  "可选处理：① 给服务进程设置能访问国内站点的 HTTPS_PROXY 环境变量后重启服务；"
                  "② 在能访问该站点的机器上执行 python pickwise.py fetch --incremental，"
                  "把 data/*.csv 与 data/validation.json 同步到本机；"
-                 "③ 只想用现有数据重算报告，执行 python pickwise.py report。")
+                 "③ 只想用现有数据重算报告，执行 python pickwise.py report；"
+                 "④ 或用 python pickwise.py serve --no-fetch 启动服务，让更新按钮只重算、不联网。")
     elif "timed out" in low or "timeout" in low or "请求失败" in text:
         text += ("\n\n原因：访问开奖数据源超时或网络不可达。请检查服务器出站网络、DNS 或代理设置；"
                  "也可先在能联网的机器上采集后同步 data/*.csv。")
@@ -49,23 +50,32 @@ def inject_update_api(html: str) -> str:
 
 
 def run_update(options=None):
-    """增量采集并重建报告，返回 (data, message)；并发时返回 (None, 提示)。"""
+    """增量采集并重建报告，返回 (data, message)；并发时返回 (None, 提示)。
+
+    options["skip_fetch"]=True 时跳过联网采集，只用现有 CSV 重算（--no-fetch）。
+    """
     from .fetch import fetch_all
     from .report import build_data, generate
 
     opts = {**_DEFAULTS, **(options or {})}
+    skip_fetch = bool(opts.pop("skip_fetch", False))
     if not _UPDATE_LOCK.acquire(blocking=False):
         return None, "已有更新任务正在进行中，请稍后再试"
     try:
-        info = fetch_all(list(GAME_ORDER), full=False, verbose=False)
-        added = sum(v.get("new_rows", 0) for v in info["games"].values())
+        if skip_fetch:
+            added = 0
+        else:
+            info = fetch_all(list(GAME_ORDER), full=False, verbose=False)
+            added = sum(v.get("new_rows", 0) for v in info["games"].values())
         data = build_data(**opts)
         generate(data)
         latest = ", ".join(
             f"{v['name']} 第 {v['latest']['issue']} 期"
             for v in (data["games"][k]["analysis"] for k in GAME_ORDER)
         )
-        return data, f"新增 {added} 期；{latest}"
+        prefix = ("本次未采集（--no-fetch），仅用现有 CSV 重算；" if skip_fetch
+                  else f"新增 {added} 期；")
+        return data, prefix + latest
     finally:
         _UPDATE_LOCK.release()
 
@@ -149,6 +159,8 @@ def serve(host="0.0.0.0", port=8765, options=None):
           + ("（局域网内可用本机 IP + 端口访问；服务无鉴权，请只在可信网络使用）"
              if host not in ("127.0.0.1", "localhost") else "（仅本机可访问）"))
     print("请用这个服务提供的地址打开报告再点「更新数据」，按钮会走同源接口；Ctrl+C 停止服务。")
+    if globals()["_DEFAULTS"].get("skip_fetch"):
+        print("已启用 --no-fetch：更新按钮只用现有 CSV 重算，不会联网采集。")
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

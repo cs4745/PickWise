@@ -89,6 +89,7 @@ python pickwise.py backtest --rounds 200 --window 250
 python pickwise.py strategy --games all --groups 6 --expand 2    # 新闻模式单式/复式
 python pickwise.py report --count 3 --rounds 200
 python pickwise.py serve --port 9000 --host 0.0.0.0    # 启动本地服务（默认 0.0.0.0:8765）
+python pickwise.py serve --port 8801 --no-fetch        # 数据源被拦截时，只重算不联网
 ```
 
 也可用 `python -m pickwise <命令>`。彩种代码：`ssq` 双色球、`dlt` 超级大乐透、`qxc` 七星彩、`kl8` 快乐 8（选十）。
@@ -250,6 +251,14 @@ PickWise/
 | `PermissionError` | `data/` 或 `output/` 对服务进程不可写 | 给运行服务的用户授予这两个目录的写权限 |
 | `GET /api/status` 返回 404「尚无分析数据」 | `output/analysis.json` 被 `.gitignore` 忽略，新部署不会自带 | 在服务器上先跑一次 `python pickwise.py report`，它会同时生成 `report.html` 和 `analysis.json` |
 
+**服务器被数据源拦截时，推荐用「仅重算」模式**：启动时加 `--no-fetch`，按钮只读取本地 `data/*.csv` 重新分析并生成报告，完全不联网，不会再触发 403：
+
+```bash
+python pickwise.py serve --port 8801 --no-fetch
+```
+
+按钮完成后的提示会明确写明「本次未采集（--no-fetch），仅用现有 CSV 重算」。新数据由能访问数据源的机器采集后同步过来（见上表第 ② 条）。不带这个参数时行为不变，仍是「增量采集 + 重算」。
+
 采集器使用标准库 `urllib`，会自动读取 `HTTPS_PROXY` / `HTTP_PROXY` 环境变量；配置后需**重启服务**才生效：
 
 ```bash
@@ -264,7 +273,7 @@ HTTPS_PROXY=http://127.0.0.1:7890 python pickwise.py serve --port 8801
 python -m unittest discover -s tests -v
 ```
 
-31 个单元测试覆盖卡方分布 p 值、数据规则校验、组合生成合法性、回测输出结构与显著性结论分支、多种子稳健性、最推荐号码、新闻模式单式/复式、快乐 8 奖级概率与理论返奖率、服务默认监听地址与自定义端口下的同源接口注入、更新失败错误提示与排查建议等，不需要联网。
+33 个单元测试覆盖卡方分布 p 值、数据规则校验、组合生成合法性、回测输出结构与显著性结论分支、多种子稳健性、最推荐号码、新闻模式单式/复式、快乐 8 奖级概率与理论返奖率、服务默认监听地址与自定义端口下的同源接口注入、`--no-fetch` 不联网重算、更新失败错误提示与排查建议等，不需要联网。
 
 ## 合规说明
 
