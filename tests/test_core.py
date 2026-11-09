@@ -208,6 +208,26 @@ class TestServe(unittest.TestCase):
         b = build_parser().parse_args(["serve", "--host", "127.0.0.1", "--port", "9000"])
         self.assertEqual((b.host, b.port), ("127.0.0.1", 9000))
 
+    def test_friendly_error_explains_http_403(self):
+        from pickwise.serve import friendly_error
+        msg = friendly_error(RuntimeError(
+            "请求失败（重试 3 次）: https://www.cwl.gov.cn/...\nHTTP Error 403: Forbidden"))
+        self.assertIn("403", msg)
+        self.assertIn("HTTPS_PROXY", msg)
+        self.assertIn("fetch --incremental", msg)
+        self.assertIn("与监听地址、端口", msg)
+
+    def test_friendly_error_explains_timeout_and_permission(self):
+        from pickwise.serve import friendly_error
+        self.assertIn("出站网络", friendly_error(TimeoutError("timed out")))
+        self.assertIn("写权限", friendly_error(PermissionError("denied")))
+
+    def test_update_ui_parses_server_error_body(self):
+        """页面必须先读响应体再判断 res.ok，不能只显示 HTTP 500。"""
+        from pickwise.report import TEMPLATE
+        self.assertIn("out.error||'服务端未给出原因'", TEMPLATE)
+        self.assertNotIn("if(!res.ok)throw new Error('HTTP '+res.status);", TEMPLATE)
+
     def test_inject_update_api_is_same_origin(self):
         from pickwise.serve import UPDATE_API_TOKEN, inject_update_api
         out = inject_update_api("<script>const injected=" + UPDATE_API_TOKEN + ";</script>")

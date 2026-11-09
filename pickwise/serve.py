@@ -11,12 +11,32 @@ from __future__ import annotations
 
 import json
 import threading
+import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from .config import GAME_ORDER, OUTPUT_DIR
 
 _UPDATE_LOCK = threading.Lock()
 _DEFAULTS = {"rec_count": 3, "rounds": 200, "window": 250, "seed": 20261105}
+
+
+def friendly_error(exc: Exception) -> str:
+    """把采集/重算异常转成用户能看懂、能动手排查的提示。"""
+    text = f"{type(exc).__name__}: {exc}"
+    low = text.lower()
+    if isinstance(exc, PermissionError):
+        text += "\n\n原因：data/ 或 output/ 对服务进程不可写，请给运行服务的用户授予这两个目录的写权限。"
+    elif "403" in text or "forbidden" in low:
+        text += ("\n\n原因：开奖数据源拒绝了本次请求（HTTP 403）。常见于云服务器 / VPS 的出口 IP "
+                 "被网站反爬或地域策略拦截，与监听地址、端口和程序本身无关。\n"
+                 "可选处理：① 给服务进程设置能访问国内站点的 HTTPS_PROXY 环境变量后重启服务；"
+                 "② 在能访问该站点的机器上执行 python pickwise.py fetch --incremental，"
+                 "把 data/*.csv 与 data/validation.json 同步到本机；"
+                 "③ 只想用现有数据重算报告，执行 python pickwise.py report。")
+    elif "timed out" in low or "timeout" in low or "请求失败" in text:
+        text += ("\n\n原因：访问开奖数据源超时或网络不可达。请检查服务器出站网络、DNS 或代理设置；"
+                 "也可先在能联网的机器上采集后同步 data/*.csv。")
+    return text
 
 # 静态报告里保留占位符：直接双击 HTML 或用静态预览页打开时，按钮回退到默认 8765；
 # 只有由本服务返回页面时才替换成同源路径，这样 --host / --port 怎么改都能正确命中。
@@ -110,8 +130,9 @@ class _Handler(BaseHTTPRequestHandler):
                 self._json(409, {"ok": False, "error": message})
             else:
                 self._json(200, {"ok": True, "message": message, "data": data})
-        except Exception as exc:  # noqa: BLE001 - 把错误原样返回给页面显示
-            self._json(500, {"ok": False, "error": f"{type(exc).__name__}: {exc}"})
+        except Exception as exc:  # noqa: BLE001 - 把错误与排查建议返回给页面显示
+            traceback.print_exc()
+            self._json(500, {"ok": False, "error": friendly_error(exc)})
 
 
 class _Server(ThreadingHTTPServer):

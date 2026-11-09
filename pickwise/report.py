@@ -667,16 +667,22 @@ async function doUpdate(){
   btn.disabled=true;btn.textContent='更新中…';st.textContent='正在从官方公开接口增量采集开奖数据并重算分析，请稍候…';
   try{
     const res=await fetch(UPDATE_API,{method:'POST'});
-    if(!res.ok)throw new Error('HTTP '+res.status);
-    const out=await res.json();
+    let out;
+    try{out=await res.json();}
+    catch(_){throw new Error('HTTP '+res.status+'：服务端返回的不是 JSON（可能被代理或网关拦截）');}
+    if(!res.ok)throw new Error('HTTP '+res.status+'：'+(out.error||'服务端未给出原因'));
     if(!out.ok)throw new Error(out.error||'服务端返回失败');
     D=out.data;G=D.games;
     renderAll();
     st.textContent='更新完成：'+(out.message||'数据已刷新')+' · 生成于 '+(D.meta.generated_at||'');
   }catch(err){
-    st.innerHTML='更新失败：'+esc(err.message||err)+'。请先在项目目录运行 <code>python pickwise.py serve</code>，'
-      +'再通过该服务提供的地址（默认 <code>http://127.0.0.1:8765/</code>）打开报告后点击本按钮；'
-      +'直接双击 HTML 文件、或用了自定义端口却从别处打开页面，都无法调用本地采集程序。';
+    st.innerHTML='<b>更新失败</b><div class="note strong" style="white-space:pre-wrap;word-break:break-all">'
+      +esc(String(err.message||err))+'</div>'
+      +'<div class="hint">若提示 403 / 请求失败，多为服务器 IP 被开奖数据源拒绝，与端口无关；'
+      +'可在能访问该站点的机器上采集后同步 <code>data/*.csv</code>，或给服务进程配置可用的 '
+      +'<code>HTTPS_PROXY</code> 后重启。只用现有数据重算报告可执行 '
+      +'<code>python pickwise.py report</code>；本地服务未启动时先运行 '
+      +'<code>python pickwise.py serve</code> 并从它提供的地址打开本页。</div>';
   }finally{btn.disabled=false;btn.textContent='更新数据';}
 }
 // ---------------------------------------------------------------- 事件（委托，重渲染后依然有效）

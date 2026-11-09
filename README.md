@@ -239,13 +239,32 @@ PickWise/
 └── README.md
 ```
 
+## 更新失败排查
+
+「更新数据」按钮会**直接显示服务端返回的真实错误**（含异常类型、失败 URL 与排查建议），不再只报一个笼统的 `HTTP 500`；服务端控制台同时打印完整 traceback。
+
+| 现象 | 原因 | 处理 |
+| --- | --- | --- |
+| `HTTP 403 Forbidden` / `请求失败（重试 3 次）` | 开奖数据源拒绝了该服务器 IP。云服务器 / VPS 的出口 IP 常被反爬或地域策略拦截，**与监听地址、端口、程序都无关** | ① 给服务进程配置能访问国内站点的 `HTTPS_PROXY` 后重启；② 在能访问的机器上执行 `python pickwise.py fetch --incremental`，把 `data/*.csv` 与 `data/validation.json` 同步到服务器 |
+| `timed out` / 网络不可达 | 服务器出站网络、DNS 或代理异常 | 检查出站网络与代理；或同样改用「本地采集 + 同步 CSV」 |
+| `PermissionError` | `data/` 或 `output/` 对服务进程不可写 | 给运行服务的用户授予这两个目录的写权限 |
+| `GET /api/status` 返回 404「尚无分析数据」 | `output/analysis.json` 被 `.gitignore` 忽略，新部署不会自带 | 在服务器上先跑一次 `python pickwise.py report`，它会同时生成 `report.html` 和 `analysis.json` |
+
+采集器使用标准库 `urllib`，会自动读取 `HTTPS_PROXY` / `HTTP_PROXY` 环境变量；配置后需**重启服务**才生效：
+
+```bash
+HTTPS_PROXY=http://127.0.0.1:7890 python pickwise.py serve --port 8801
+```
+
+不采集、只用现有 CSV 重算报告，随时可执行 `python pickwise.py report`（不需要启动服务）。本项目不提供绕过网站访问限制的能力，请遵守各数据源网站的访问条款。
+
 ## 测试
 
 ```bash
 python -m unittest discover -s tests -v
 ```
 
-28 个单元测试覆盖卡方分布 p 值、数据规则校验、组合生成合法性、回测输出结构与显著性结论分支、多种子稳健性、最推荐号码、新闻模式单式/复式、快乐 8 奖级概率与理论返奖率、服务默认监听地址与自定义端口下的同源接口注入等，不需要联网。
+31 个单元测试覆盖卡方分布 p 值、数据规则校验、组合生成合法性、回测输出结构与显著性结论分支、多种子稳健性、最推荐号码、新闻模式单式/复式、快乐 8 奖级概率与理论返奖率、服务默认监听地址与自定义端口下的同源接口注入、更新失败错误提示与排查建议等，不需要联网。
 
 ## 合规说明
 
