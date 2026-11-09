@@ -271,6 +271,24 @@ class TestServe(unittest.TestCase):
         self.assertNotIn("const injected='/api/update'", text)
 
 
+class TestRepoLayout(unittest.TestCase):
+    @staticmethod
+    def _rules():
+        raw = (Path(__file__).resolve().parent.parent / ".gitignore").read_text(encoding="utf-8")
+        return [ln.strip() for ln in raw.splitlines()
+                if ln.strip() and not ln.lstrip().startswith("#")]
+
+    def test_generated_reports_are_gitignored(self):
+        rules = self._rules()
+        self.assertIn("output/report.html", rules)
+        self.assertIn("output/analysis.json", rules)
+
+    def test_history_csv_stays_tracked(self):
+        rules = self._rules()
+        self.assertNotIn("*.csv", rules)
+        self.assertFalse(any(ln.startswith("data/") for ln in rules))
+
+
 @unittest.skipUnless(HAS_DATA, "需要先运行 python pickwise.py fetch")
 class TestWithRealData(unittest.TestCase):
     def test_all_draws_pass_validation(self):

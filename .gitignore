@@ -7,5 +7,7 @@ venv/
 .coverage
 .DS_Store
 *.log
+# 报告与结构化数据只在各自机器本地生成，不入库；data/*.csv 仍走 Git 同步
+output/report.html
 output/analysis.json
 .workbuddy/

@@ -52,6 +52,8 @@ python pickwise.py all          # 一键：采集全量数据 + 生成报告
 
 生成的报告在 `output/report.html`，直接用浏览器打开即可（`analysis.json` 是同一份结构化数据，便于二次开发）。
 
+> **报告不进 Git**：`output/report.html` 与 `output/analysis.json` 只在各自机器本地生成，不随仓库分发，避免服务端重算时把 Git 工作区改脏、下次 `git pull` 冲突。仓库里随 Git 同步的是 **`data/*.csv` 历史开奖数据**和 `data/validation.json`。所以新 clone / 新部署后，要先跑一次 `python pickwise.py report`（或 `python pickwise.py all`），`output/` 目录会自动创建。
+
 **想让报告右上角的「更新数据」按钮可用**，需要启动本地服务（静态 HTML 本身无法运行 Python 采集程序）：
 
 ```bash
@@ -67,7 +69,7 @@ python pickwise.py serve --host 0.0.0.0 --port 9000   # 局域网 + 自定义端
 
 > 默认 `0.0.0.0` 意味着局域网内任何设备都能访问该服务并触发采集、写入 `output/`；服务**没有鉴权**，请只在可信网络使用。需要限制为本机就加 `--host 127.0.0.1`。
 
-仓库已附带采集好的历史数据 CSV，**只想看分析可以不联网**：
+仓库已附带采集好的历史数据 CSV，**只想看分析可以不联网**（这条命令同时生成 `report.html` 与 `analysis.json`）：
 
 ```bash
 python pickwise.py report       # 直接用已有 CSV 重新生成报告
@@ -234,8 +236,8 @@ PickWise/
 │   ├── report.py             # 自包含 HTML 报告生成
 │   ├── serve.py              # 本地服务（默认 0.0.0.0，注入同源更新接口）
 │   └── cli.py                # 命令行
-├── data/                     # 历史开奖 CSV + 校验报告
-├── output/                   # report.html / analysis.json
+├── data/                     # 历史开奖 CSV + 校验报告（随 Git 同步）
+├── output/                   # report.html / analysis.json（本地生成，不入库）
 ├── tests/                    # unittest 单元测试
 └── README.md
 ```
@@ -249,7 +251,7 @@ PickWise/
 | `HTTP 403 Forbidden` / `请求失败（重试 3 次）` | 开奖数据源拒绝了该服务器 IP。云服务器 / VPS 的出口 IP 常被反爬或地域策略拦截，**与监听地址、端口、程序都无关** | ① 给服务进程配置能访问国内站点的 `HTTPS_PROXY` 后重启；② 在能访问的机器上执行 `python pickwise.py fetch --incremental`，把 `data/*.csv` 与 `data/validation.json` 同步到服务器 |
 | `timed out` / 网络不可达 | 服务器出站网络、DNS 或代理异常 | 检查出站网络与代理；或同样改用「本地采集 + 同步 CSV」 |
 | `PermissionError` | `data/` 或 `output/` 对服务进程不可写 | 给运行服务的用户授予这两个目录的写权限 |
-| `GET /api/status` 返回 404「尚无分析数据」 | `output/analysis.json` 被 `.gitignore` 忽略，新部署不会自带 | 在服务器上先跑一次 `python pickwise.py report`，它会同时生成 `report.html` 和 `analysis.json` |
+| `GET /api/status` 返回 404「尚无分析数据」、或 `GET /` 返回 404「尚未生成报告」 | `output/` 下两个文件都只在本地生成，新部署不会自带 | 在服务器上先跑一次 `python pickwise.py report`，它会同时生成 `report.html` 和 `analysis.json` |
 
 **服务器被数据源拦截时，推荐用「仅重算」模式**：启动时加 `--no-fetch`，按钮只读取本地 `data/*.csv` 重新分析并生成报告，完全不联网，不会再触发 403：
 
@@ -273,7 +275,7 @@ HTTPS_PROXY=http://127.0.0.1:7890 python pickwise.py serve --port 8801
 python -m unittest discover -s tests -v
 ```
 
-33 个单元测试覆盖卡方分布 p 值、数据规则校验、组合生成合法性、回测输出结构与显著性结论分支、多种子稳健性、最推荐号码、新闻模式单式/复式、快乐 8 奖级概率与理论返奖率、服务默认监听地址与自定义端口下的同源接口注入、`--no-fetch` 不联网重算、更新失败错误提示与排查建议等，不需要联网。
+35 个单元测试覆盖卡方分布 p 值、数据规则校验、组合生成合法性、回测输出结构与显著性结论分支、多种子稳健性、最推荐号码、新闻模式单式/复式、快乐 8 奖级概率与理论返奖率、服务默认监听地址与自定义端口下的同源接口注入、`--no-fetch` 不联网重算、更新失败错误提示与排查建议、仓库生成物忽略规则与 CSV 跟踪等，不需要联网。
 
 ## 合规说明
 
