@@ -1,25 +1,25 @@
 {
-  "fetched_at": "2026-11-05T16:37:25+08:00",
+  "fetched_at": "2026-11-09T10:37:37+08:00",
   "mode": "full",
   "games": {
     "ssq": {
       "game": "ssq",
       "name": "双色球",
-      "count": 3523,
+      "count": 3525,
       "new_rows": 0,
       "latest": {
-        "issue": "2026126",
-        "date": "2026-11-03",
+        "issue": "2026128",
+        "date": "2026-11-08",
         "front": [
-          9,
+          5,
+          6,
           10,
-          13,
-          22,
-          29,
-          32
+          25,
+          27,
+          30
         ],
         "back": [
-          12
+          11
         ],
         "source": "中国福彩网"
       },
@@ -48,35 +48,35 @@
         "2012153: 缺少开奖日期（数据源未提供）",
         "2012152: 缺少开奖日期（数据源未提供）"
       ],
-      "sha256": "91c7d22afe608bec21221f651bdf1bd3de186d18b2084fc2041e12ab735d6aec",
+      "sha256": "f09f9f18ee3592731691126b06469fc1670779f6d8a650751d7e26679d4f974f",
       "cross_check": {
-        "checked": 2084,
+        "checked": 2086,
         "conflicts": [],
         "conflict_count": 0
       },
       "source_rows": {
-        "中国福彩网": 2084,
+        "中国福彩网": 2086,
         "500彩票网": 1439
       }
     },
     "dlt": {
       "game": "dlt",
       "name": "超级大乐透",
-      "count": 2944,
+      "count": 2945,
       "new_rows": 0,
       "latest": {
-        "issue": "26126",
-        "date": "2026-11-04",
+        "issue": "26127",
+        "date": "2026-11-07",
         "front": [
           5,
-          11,
+          6,
           17,
-          25,
-          34
+          18,
+          27
         ],
         "back": [
-          4,
-          6
+          3,
+          12
         ],
         "source": "中国体育彩票"
       },
@@ -101,32 +101,32 @@
       "validation_errors": 0,
       "validation_warnings": 0,
       "warning_sample": [],
-      "sha256": "bb51a077504f5aba8a495fc2722842802ee2b3a46f924a7009f0b77c22610255",
+      "sha256": "5373dced8c5ead265e8d94db5ea790252bb318b0b378e1ecee8f09ca8a464136",
       "cross_check": {
-        "checked": 2944,
+        "checked": 2945,
         "conflicts": [],
         "conflict_count": 0
       },
       "source_rows": {
-        "中国体育彩票": 2944,
-        "500彩票网(仅校验)": 2944
+        "中国体育彩票": 2945,
+        "500彩票网(仅校验)": 2945
       }
     },
     "qxc": {
       "game": "qxc",
       "name": "七星彩",
-      "count": 3410,
+      "count": 3412,
       "new_rows": 0,
       "latest": {
-        "issue": "26126",
-        "date": "2026-11-03",
+        "issue": "26128",
+        "date": "2026-11-08",
         "front": [
+          9,
           3,
-          3,
-          3,
-          4,
-          1,
-          7
+          8,
+          6,
+          2,
+          5
         ],
         "back": [
           8
@@ -154,37 +154,37 @@
       "validation_errors": 0,
       "validation_warnings": 0,
       "warning_sample": [],
-      "sha256": "4dc0cb9849e0a77b61c850b0ddf96c8b125f8326f857ebe17b36b3b4be1c048f"
+      "sha256": "21d3bf7d259d979dfbbfdad76e8e114c60ffb72d9cb410b1c379f0d15ae3995f"
     },
     "kl8": {
       "game": "kl8",
       "name": "快乐8（选十）",
-      "count": 2115,
+      "count": 2119,
       "new_rows": 0,
       "latest": {
-        "issue": "2026294",
-        "date": "2026-11-04",
+        "issue": "2026298",
+        "date": "2026-11-08",
         "front": [
-          3,
-          7,
-          10,
+          2,
+          5,
+          8,
+          12,
           16,
-          21,
+          20,
           25,
+          27,
+          28,
           29,
-          33,
+          31,
           35,
+          36,
+          42,
           43,
-          45,
-          52,
+          49,
+          57,
           58,
-          60,
-          64,
-          68,
-          69,
           72,
-          76,
-          80
+          75
         ],
         "back": [],
         "source": "中国福彩网"
@@ -222,7 +222,7 @@
       "validation_errors": 0,
       "validation_warnings": 0,
       "warning_sample": [],
-      "sha256": "1b70d7fd32c03ee65f553c431e51f5cbfa8a39cc557107ac4a93aedefbc9aa6d"
+      "sha256": "80c760d927e124aafd5b32ef7fe0cc9da03a89643fed8f8fbec7fa5aa9914036"
     }
   },
   "sources": {

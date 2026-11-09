@@ -200,6 +200,31 @@ class TestTopPick(unittest.TestCase):
             extract_top_pick(game_of("ssq"), {})
 
 
+class TestServe(unittest.TestCase):
+    def test_serve_default_host_and_custom_port(self):
+        from pickwise.cli import build_parser
+        a = build_parser().parse_args(["serve"])
+        self.assertEqual((a.host, a.port), ("0.0.0.0", 8765))
+        b = build_parser().parse_args(["serve", "--host", "127.0.0.1", "--port", "9000"])
+        self.assertEqual((b.host, b.port), ("127.0.0.1", 9000))
+
+    def test_inject_update_api_is_same_origin(self):
+        from pickwise.serve import UPDATE_API_TOKEN, inject_update_api
+        out = inject_update_api("<script>const injected=" + UPDATE_API_TOKEN + ";</script>")
+        self.assertIn("'/api/update'", out)
+        self.assertNotIn("__PICKWISE_UPDATE_API__", out)
+
+    def test_static_report_keeps_fallback_placeholder(self):
+        """静态 HTML 保留占位符，双击/预览页才会回退到 8765。"""
+        from pickwise.report import generate
+        with tempfile.TemporaryDirectory() as td, patch("pickwise.report.OUTPUT_DIR", Path(td)):
+            path, _ = generate({"meta": {"version": "test", "generated_at": "2026-01-01",
+                                         "disclaimer": "仅用于测试"}, "games": {}})
+            text = path.read_text(encoding="utf-8")
+        self.assertIn("__PICKWISE_UPDATE_API__", text)
+        self.assertNotIn("const injected='/api/update'", text)
+
+
 @unittest.skipUnless(HAS_DATA, "需要先运行 python pickwise.py fetch")
 class TestWithRealData(unittest.TestCase):
     def test_all_draws_pass_validation(self):

@@ -226,7 +226,7 @@ def build_parser():
     rp.set_defaults(func=cmd_report)
 
     sv = sub.add_parser("serve", help="启动本地服务，让报告右上角「更新数据」按钮可用")
-    sv.add_argument("--host", default="127.0.0.1")
+    sv.add_argument("--host", default="0.0.0.0", help="监听地址（默认 0.0.0.0，可用 --host 127.0.0.1 限制为本机）")
     sv.add_argument("--port", type=int, default=8765)
     sv.add_argument("--count", type=int, default=3)
     add_strategy_flags(sv)

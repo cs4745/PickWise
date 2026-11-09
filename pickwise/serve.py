@@ -1,9 +1,10 @@
 """本地更新服务：为报告右上角「更新数据」按钮提供后端。
 
-只监听 127.0.0.1，不对外暴露；零第三方依赖。
-GET  /                -> 报告页面
+默认监听 0.0.0.0（可用 --host 127.0.0.1 改回仅本机），零第三方依赖。
+GET  /                -> 报告页面（注入同源更新接口，任意端口都生效）
 POST /api/update      -> 增量采集 + 重新分析 + 重新生成报告，返回最新数据
 GET  /api/status      -> 当前数据生成时间
+GET  /api/data        -> 完整结构化数据
 """
 
 from __future__ import annotations
@@ -16,6 +17,15 @@ from .config import GAME_ORDER, OUTPUT_DIR
 
 _UPDATE_LOCK = threading.Lock()
 _DEFAULTS = {"rec_count": 3, "rounds": 200, "window": 250, "seed": 20261105}
+
+# 静态报告里保留占位符：直接双击 HTML 或用静态预览页打开时，按钮回退到默认 8765；
+# 只有由本服务返回页面时才替换成同源路径，这样 --host / --port 怎么改都能正确命中。
+UPDATE_API_TOKEN = "'__PICKWISE_UPDATE_API__'"
+
+
+def inject_update_api(html: str) -> str:
+    """把报告中的更新接口占位符替换为同源 /api/update。"""
+    return html.replace(UPDATE_API_TOKEN, "'/api/update'")
 
 
 def run_update(options=None):
@@ -72,7 +82,8 @@ class _Handler(BaseHTTPRequestHandler):
         if path in ("/", "/index.html", "/report.html"):
             p = OUTPUT_DIR / "report.html"
             if p.exists():
-                self._send(200, p.read_bytes(), "text/html; charset=utf-8")
+                html = inject_update_api(p.read_text(encoding="utf-8"))
+                self._send(200, html.encode("utf-8"), "text/html; charset=utf-8")
             else:
                 self._json(404, {"ok": False, "error": "尚未生成报告，请先运行 python pickwise.py report"})
         elif path in ("/api/status", "/api/data"):
@@ -108,12 +119,15 @@ class _Server(ThreadingHTTPServer):
     allow_reuse_address = True
 
 
-def serve(host="127.0.0.1", port=8765, options=None):
+def serve(host="0.0.0.0", port=8765, options=None):
     """启动本地服务（阻塞，Ctrl+C 结束）。"""
     globals()["_DEFAULTS"] = {**_DEFAULTS, **(options or {})}
     srv = _Server((host, port), _Handler)
-    print(f"买什么 PickWise 本地服务已启动： http://{host}:{port}/")
-    print("点击报告右上角「更新数据」即可增量采集并重算；Ctrl+C 停止服务。")
+    print(f"买什么 PickWise 本地服务已启动： http://127.0.0.1:{port}/")
+    print(f"监听 {host}:{port}"
+          + ("（局域网内可用本机 IP + 端口访问；服务无鉴权，请只在可信网络使用）"
+             if host not in ("127.0.0.1", "localhost") else "（仅本机可访问）"))
+    print("请用这个服务提供的地址打开报告再点「更新数据」，按钮会走同源接口；Ctrl+C 停止服务。")
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

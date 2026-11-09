@@ -653,6 +653,8 @@ function switchTab(k){
 }
 // ---------------------------------------------------------------- 更新数据
 const UPDATE_API=(function(){
+  const injected='__PICKWISE_UPDATE_API__';
+  if(injected && injected.charAt(0)!=='_')return injected;
   if(typeof location==='undefined')return 'http://127.0.0.1:8765/api/update';
   const o=location.origin||'';
   if(o&&/:8765$/.test(o))return '/api/update';
@@ -673,7 +675,8 @@ async function doUpdate(){
     st.textContent='更新完成：'+(out.message||'数据已刷新')+' · 生成于 '+(D.meta.generated_at||'');
   }catch(err){
     st.innerHTML='更新失败：'+esc(err.message||err)+'。请先在项目目录运行 <code>python pickwise.py serve</code>，'
-      +'再访问 <code>http://127.0.0.1:8765/</code> 打开报告后点击本按钮；直接双击 HTML 文件时无法调用本地采集程序。';
+      +'再通过该服务提供的地址（默认 <code>http://127.0.0.1:8765/</code>）打开报告后点击本按钮；'
+      +'直接双击 HTML 文件、或用了自定义端口却从别处打开页面，都无法调用本地采集程序。';
   }finally{btn.disabled=false;btn.textContent='更新数据';}
 }
 // ---------------------------------------------------------------- 事件（委托，重渲染后依然有效）
